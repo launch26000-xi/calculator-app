@@ -126,6 +126,47 @@ def plan():
         ])]))
     doc.build(st)
 
+# ---------------- One-page explainer (about 6th-grade reading level) ----------------
+EXPLAINER_INTRO = ('No2 is a free app for people in Colorado. It helps you learn your rights. '
+                   'It also lets members trade gear with each other. You do not need an app store. '
+                   'You open it in your web browser. Then you can put it on your home screen.')
+EXPLAINER_SCREENS = [
+    ('Foundation', 'This is the first screen. It has ten short lessons. Each one lists where the facts came from.'),
+    ('Law Watch', 'This shows gun laws for Colorado and the whole country. Each law has a short summary and a link to the real law.'),
+    ('Library', 'Here are 25 questions with answers. Each answer links to an official source. It is facts, not legal advice.'),
+    ('Recommended Reading', 'These are good articles from the Tenth Amendment Center. We give them credit.'),
+    ('Trading Post', 'Members buy, sell and trade gear. There are 11 groups, like handguns, knives and bows. The map shows Colorado only. It shows a rough area, not a home. If no one has posted yet, it says "Be the first to post."'),
+    ('Messages', 'Members can send private notes to each other. Safety tips are on the same page.'),
+    ('Suggestion Box', 'Each month there is a contest called The Best Thing Worth Saying. Members send one short line. Each verified member gets one vote.'),
+    ('Sponsors', 'Local shops can help pay for No2. They can pay $50, $150 or $300 a month. We have no sponsors yet, so the list is empty.'),
+    ('Events and Ranges', 'This lists real public ranges in Colorado, with links to the state wildlife office. We do not list any events yet.'),
+    ('My Account', 'You will sign up with your Google account. Then you pick a nickname. Sign-up opens soon.'),
+    ('Settings', 'This shows you how to put No2 on your home screen.'),
+]
+EXPLAINER_RULES = ('Nothing in No2 is made up. If a page has nothing real to show yet, it says so. '
+                   'No money moves through No2. We never show where you live.')
+
+def explainer():
+    doc = SimpleDocTemplate(os.path.join(OUT, 'No2-Explainer.pdf'), pagesize=letter,
+                            leftMargin=0.7*inch, rightMargin=0.7*inch, topMargin=0.5*inch, bottomMargin=0.5*inch,
+                            title='What is Colorado No2?', author='Colorado No2')
+    st = []
+    header(st, 'What is Colorado No2?', 'A one-page guide. The Right Rite.')
+    big = S('ep', fontSize=11.5, leading=15.5)
+    st.append(Paragraph(EXPLAINER_INTRO, big))
+    st.append(Paragraph('Open it here:', H2))
+    st.append(Paragraph(URL, BIG))
+    st.append(Paragraph('The screens', H2))
+    rows = [[Paragraph('<b>%s</b>' % n, CELL), Paragraph(t, CELL)] for n, t in EXPLAINER_SCREENS]
+    t = Table(rows, colWidths=[1.75*inch, 5.35*inch])
+    t.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('GRID', (0,0), (-1,-1), 0.75, colors.HexColor('#CDBF9E')),
+                           ('BACKGROUND', (0,0), (0,-1), PAPER), ('TOPPADDING', (0,0), (-1,-1), 3), ('BOTTOMPADDING', (0,0), (-1,-1), 3)]))
+    st.append(t)
+    st.append(Paragraph('Our rules', H2))
+    st.append(Paragraph(EXPLAINER_RULES, big))
+    doc.build(st)
+
 os.makedirs(OUT, exist_ok=True)
 check_my_work()
+explainer()
 print('PDFs written to', os.path.abspath(OUT))

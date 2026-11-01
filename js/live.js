@@ -95,6 +95,10 @@ export function renderTrade(_p, qs) {
     paint();
   }));
   paintMap(null, []);
+  if (!m.isConfigured()) {
+    $('#results').innerHTML = emptyState('Be the first to post.', 'No member has posted an item yet. Member sign-up opens soon. Then you can post the first item on the Trading Post.');
+    return;
+  }
   gate($('#results'), 'see and post items', async (st) => {
     state.st = st;
     areaBox($('#area-box'), st, () => { state.st = m.state(); paint(); });

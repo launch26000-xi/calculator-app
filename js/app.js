@@ -318,6 +318,7 @@ function renderMore() {
     ['#/sponsors', 'Sponsors', 'Support No2. Three levels.'],
     ['#/account', 'My Account', 'Sign in, nickname, verification, your deals.'],
     ['#/settings', 'Settings and Install', 'Put No2 on your home screen.'],
+    ['for-jason/No2-Explainer.pdf', 'What is No2? (one-page guide)', 'A short, plain guide to every screen. Opens a PDF.'],
   ];
   if (st.admin) links.push(['#/admin', 'No2 Staff', 'Verify members, read sponsor requests, add events and ranges.']);
   main.innerHTML = `<h1>More</h1><div class="tiles">${links.map(([h, t, d]) => `<a class="tile" href="${h}"><strong>${t}</strong><span>${d}</span></a>`).join('')}</div>`;
@@ -381,6 +382,7 @@ function renderSettings() {
   <div class="card"><div class="btn-row"><button class="btn ghost" data-clear>Clear saved choices on this phone</button></div></div>
   <h2>About</h2>
   <div class="card"><p><strong>Colorado No2</strong> · “The Right Rite”</p>
+    <p><a href="for-jason/No2-Explainer.pdf" target="_blank" rel="noopener">What is No2? Read the one-page guide (PDF) ↗</a></p>
     <p class="note">Education first. Works offline for pages you’ve already opened. No money moves through No2. Colorado members only. Map data © OpenStreetMap contributors.</p></div>
   <footer class="foot">Made in Colorado ★ No app store required</footer>`;
   main.querySelector('[data-clear]').addEventListener('click', () => {
