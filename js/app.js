@@ -1,7 +1,7 @@
 /* Colorado No2 — Stage 1 app. Plain JavaScript, no build step. */
 import {
   CATEGORIES, VERIFY, MEMBERS, LISTINGS, NEGOTIATION_TIPS, DEAL_STEPS,
-  LIBRARY, NOT_ADVICE, NEWSLETTER_SECTIONS,
+  LIBRARY, NOT_ADVICE, NEWSLETTER_ISSUE, CONTEST, IDEAS, LADDER,
 } from './data.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -409,6 +409,17 @@ function verifyExplain(v) {
   }[v];
 }
 
+function ladderHTML() {
+  const L = LADDER;
+  const rungs = L.steps.map((t, i) => `<li><span class="rung-n" aria-hidden="true">${i + 1}</span><span>${t}</span></li>`).join(''); // fixed text from data.js, no user input
+  return `<section class="ladder" aria-labelledby="ladder-h">
+    <span class="source" style="color:#E6D9B8">★ ${esc(L.sub)} ★</span>
+    <h2 id="ladder-h">${esc(L.title)}</h2>
+    <p class="ladder-top">The Constitution is the supreme law of the land.</p>
+    <ol class="rungs">${rungs}</ol>
+    <p class="ladder-credit">— ${esc(L.credit)}</p></section>`;
+}
+
 /* =====================================================================
    NO2'S LIBRARY
    ===================================================================== */
@@ -445,6 +456,7 @@ function renderLibrary(_p, qs) {
   main.innerHTML = `
   <div class="page-title"><h1>No2’s Library</h1><span class="stamp">ASK</span></div>
   <p class="lede">Ask a question about Colorado gun laws, carry, knives, hunting, or the Constitution.</p>
+  ${ladderHTML()}
   <blockquote class="card" style="margin:0 0 14px;font-family:var(--serif);font-style:italic;color:var(--navy)">
     “This Constitution … shall be the supreme Law of the Land.” <span class="note" style="font-style:normal">— U.S. Constitution, Article VI</span></blockquote>
   <form class="ask" id="ask-form" role="search">
@@ -488,26 +500,53 @@ function renderMessages() {
 }
 
 function renderNewsletter() {
+  const n = NEWSLETTER_ISSUE;
   main.innerHTML = `
-  <div class="page-title"><h1>The No2 Newsletter</h1>${comingSoon()}</div>
-  <p class="lede">News for Colorado’s Second Amendment community, in plain words. Here’s what each issue will have:</p>
-  <div class="grid">${NEWSLETTER_SECTIONS.map((s) => `<div class="card"><h2 style="margin:0 0 4px">${esc(s.t)}</h2><p style="margin:0">${esc(s.d)}</p></div>`).join('')}</div>`;
+  <div class="page-title"><h1>The No2 Newsletter</h1><span class="stamp">No. ${n.no}</span></div>
+  <p class="note" style="margin-top:0">${esc(n.date)}</p>
+  <p class="lede">${esc(n.intro)}</p>
+  <nav class="chips" aria-label="Newsletter sections">${n.sections.map((s) => `<button class="chip" data-jump="${s.id}">${esc(s.t)}</button>`).join('')}</nav>
+  ${n.sections.map((s) => `
+  <section class="card news" id="news-${s.id}" aria-labelledby="h-${s.id}" style="margin-top:14px">
+    <div class="news-head"><img src="art/${s.art}.svg" alt="" width="56" height="56"><div>
+      <h2 id="h-${s.id}" style="margin:0">${esc(s.t)}</h2><p class="note" style="margin:0">${esc(s.d)}</p></div></div>
+    ${s.stories.map((st) => `<article class="story"><h3>${esc(st.h)}</h3>${st.p.map((p) => `<p>${esc(p)}</p>`).join('')}${st.ladder ? ladderHTML().replace(/id="ladder-h"/, '').replace('aria-labelledby="ladder-h"', 'aria-label="The Constitutional Ladder"') : ''}
+      ${st.link ? `<p><a href="${esc(st.link.url)}" target="_blank" rel="noopener">Read the official source: ${esc(st.link.label)} ↗</a></p>` : ''}</article>`).join('')}
+    ${s.law ? `<div class="const-view"><strong>Constitutional view:</strong> this reflects the Constitution, but current law may differ, and police and courts enforce current law.</div><p class="disclaimer">${NOT_ADVICE}</p>` : ''}
+  </section>`).join('')}
+  <div class="card" style="margin-top:14px"><h2 style="margin-top:0">Get it every month</h2>
+    <p>In Stage 2, members get each new issue right in the app, with a phone alert when it comes out.</p>
+    <a class="btn red" href="#/suggest">Enter this month’s contest</a></div>`;
+  main.querySelectorAll('[data-jump]').forEach((b) => b.addEventListener('click', () => {
+    const el = $('#news-' + b.dataset.jump); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); $('#h-' + b.dataset.jump).setAttribute('tabindex', '-1'); $('#h-' + b.dataset.jump).focus({ preventScroll: true });
+  }));
 }
 
 function renderSuggest() {
   const draft = store.get('suggestDraft', '');
+  const STATUS = { done: ['green', '✓ Built'], planned: ['navy', 'Coming next'] };
+  const entries = CONTEST.entries;
   main.innerHTML = `
-  <div class="page-title"><h1>Suggestion Box</h1>${comingSoon()}</div>
-  <div class="card">
-    <span class="source" style="color:var(--red-dark)">★ Member contest</span>
-    <h2 style="margin-top:6px">The Best Thing Worth Saying</h2>
-    <p>Share the one thing most worth saying about freedom, the Constitution, or the right to keep and bear arms. Members vote, and the best one wins a spot in the newsletter.</p>
-    <p class="note">Voting opens in Stage 2: one vote per verified account.</p>
-    <form id="sug-form"><label for="sug">Your entry (saved on this phone for now)</label>
-      <textarea id="sug" rows="4" maxlength="280" placeholder="Keep it short. 280 letters or less.">${esc(draft)}</textarea>
-      <div class="btn-row"><button class="btn red" type="submit">Save my draft</button></div></form>
-  </div>
-  <div class="card"><h2 style="margin-top:0">Ideas for No2</h2><p>Have an idea to make No2 better? In Stage 2 you can send it right here.</p></div>`;
+  <h1>Suggestion Box</h1>
+  <section class="card" aria-labelledby="contest-h">
+    <span class="source" style="color:var(--red-dark)">★ Member contest · ${esc(CONTEST.month)}</span>
+    <h2 id="contest-h" style="margin-top:6px">The Best Thing Worth Saying</h2>
+    <ul class="checklist">${CONTEST.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
+    <p class="note">Entries close ${esc(CONTEST.closes)}.</p>
+    ${entries.length ? '' : '<div class="banner"><p><strong>No entries yet.</strong> Be the first to write the Best Thing Worth Saying.</p></div>'}
+    <form id="sug-form" style="margin-top:6px"><label for="sug">Your entry</label>
+      <textarea id="sug" rows="3" maxlength="280" placeholder="280 letters or less.">${esc(draft)}</textarea>
+      <p class="note" id="sug-count" aria-live="polite" style="margin:4px 0 0">${draft.length} of 280 letters</p>
+      <div class="btn-row"><button class="btn red" type="submit">Save my entry</button></div>
+      <p class="note">Your entry is saved on this phone. It goes to the contest as soon as member sign-in is turned on.</p></form>
+  </section>
+  <section class="card" aria-labelledby="ideas-h">
+    <h2 id="ideas-h" style="margin-top:0">The No2 Plan</h2>
+    <p>What is built and what comes next.</p>
+    <ul class="ideas">${IDEAS.map((d) => { const [c, l] = STATUS[d.status];
+      return `<li><strong>${esc(d.t)}</strong><span class="tag ${c}">${l}</span></li>`; }).join('')}</ul>
+  </section>`;
+  $('#sug').addEventListener('input', (e) => { $('#sug-count').textContent = `${e.target.value.length} of 280 letters`; });
   $('#sug-form').addEventListener('submit', (e) => { e.preventDefault(); store.set('suggestDraft', $('#sug').value); toast('Saved on this phone.'); });
 }
 

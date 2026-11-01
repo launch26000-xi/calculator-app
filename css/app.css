@@ -202,6 +202,34 @@ input[type=range] { width: 100%; accent-color: var(--red); height: 44px; margin:
 .q-list button { width: 100%; text-align: left; min-height: 44px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 1rem var(--sans); color: var(--navy); cursor: pointer; }
 .q-list button:hover { border-color: var(--navy); }
 
+/* ---------- Newsletter + Suggestion Box ---------- */
+.news-head { display: flex; gap: 12px; align-items: center; padding-bottom: 10px; border-bottom: 2px solid var(--red); margin-bottom: 6px; }
+.news-head img { flex: none; background: var(--paper); border-radius: 50%; padding: 4px; border: 2px solid var(--navy); }
+.story + .story { border-top: 1px dashed var(--line); }
+.story h3 { margin-top: 12px; }
+.entries { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 10px; }
+.entry { display: grid; grid-template-columns: 34px 1fr; gap: 8px 10px; align-items: start; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.entry.mine { border: 2px solid var(--red); }
+.entry .btn { grid-column: 2; justify-self: start; }
+.entry .rank { width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff; display: grid; place-items: center; font-family: var(--stencil); }
+.entry .quote { font-family: var(--serif); font-style: italic; font-size: 1.05rem; color: var(--navy); margin: 0 0 4px; }
+.entry .meta { margin: 0; }
+.ideas { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; }
+.ideas li { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.ideas .tag { margin-top: 4px; }
+.ideas .btn { flex: none; }
+
+/* ---------- Constitutional Ladder ---------- */
+.ladder { background: var(--navy); color: #fff; border-radius: var(--radius); padding: 16px; margin: 0 0 14px; border-bottom: 5px solid var(--red); box-shadow: var(--shadow); }
+.ladder h2 { color: #fff; margin: 4px 0 6px; }
+.ladder-top { font-family: var(--serif); font-style: italic; color: #E6D9B8; margin: 0 0 10px; }
+.rungs { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.rungs li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; background: rgba(255,255,255,.07); border-left: 4px solid var(--red); border-radius: 6px; padding: 8px 10px; }
+.rungs b { color: #fff; text-decoration: underline; text-decoration-color: var(--red); text-underline-offset: 3px; }
+.rung-n { width: 28px; height: 28px; border-radius: 50%; background: var(--red); display: grid; place-items: center; font-family: var(--stencil); }
+.ladder-credit { text-align: right; font-family: var(--serif); font-style: italic; color: #E6D9B8; margin: 10px 0 0; }
+.story .ladder { margin-top: 8px; }
+
 /* ---------- Install guide ---------- */
 .guide { display: grid; gap: 12px; counter-reset: g; list-style: none; padding: 0; }
 .guide li { counter-increment: g; display: grid; grid-template-columns: 1fr; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }

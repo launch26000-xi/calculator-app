@@ -1,5 +1,5 @@
 /* Colorado No2 service worker: fast loads + offline. */
-const VERSION = 'no2-v1';
+const VERSION = 'no2-v2';
 const SHELL = [
   './', './index.html', './offline.html', './manifest.webmanifest',
   './css/app.css', './js/app.js', './js/data.js',
