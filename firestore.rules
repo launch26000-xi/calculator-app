@@ -1,0 +1,58 @@
+rules_version = '2';
+// Colorado No2 database rules.
+// Members can only create and change their own records. Everything else is closed.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isMember() { return signedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid)); }
+    function validNick(n) { return n is string && n.matches('^[A-Za-z0-9_]{3,20}$'); }
+
+    // Member profiles: nickname only. No real names, emails or addresses are stored.
+    match /members/{uid} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nick', 'verify', 'since', 'colorado', 'adult', 'rulesOk'])
+        && validNick(request.resource.data.nick)
+        && request.resource.data.verify == 'none'
+        && request.resource.data.colorado == true
+        && request.resource.data.adult == true
+        && request.resource.data.rulesOk == true
+        && request.resource.data.since == request.time
+        // nickname must be claimed in the same save
+        && getAfter(/databases/$(database)/documents/nicknames/$(request.resource.data.nick.lower())).data.uid == uid;
+      allow update: if false;   // nickname and verification can't be changed by the member
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // One document per nickname (lower case) so no two members share a name.
+    match /nicknames/{nick} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/members/$(request.auth.uid)).data.nick.lower() == nick;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // "The Best Thing Worth Saying" contest: one entry per member per month.
+    // Entry id is "<month>_<uid>", e.g. "2026-11_abc123".
+    match /contestEntries/{entryId} {
+      allow read: if signedIn();
+      allow create: if isMember()
+        && entryId == request.resource.data.month + '_' + request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'nick', 'text', 'month', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.nick == get(/databases/$(database)/documents/members/$(request.auth.uid)).data.nick
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 3 && request.resource.data.text.size() <= 280
+        && request.resource.data.month.matches('^[0-9]{4}-[0-9]{2}$')
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}

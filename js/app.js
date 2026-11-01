@@ -3,6 +3,7 @@ import {
   CATEGORIES, VERIFY, MEMBERS, LISTINGS, NEGOTIATION_TIPS, DEAL_STEPS,
   LIBRARY, NOT_ADVICE, NEWSLETTER_ISSUE, CONTEST, IDEAS, LADDER,
 } from './data.js';
+import * as members from './members.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const main = $('#main');
@@ -89,6 +90,7 @@ const ROUTES = {
   newsletter: { art: 'eagle', render: renderNewsletter, tab: 'newsletter' },
   suggest: { art: 'flag', render: renderSuggest, tab: 'suggest' },
   settings: { art: 'stars2', render: renderSettings, tab: null },
+  account: { art: 'eagle', render: renderAccount, tab: null },
 };
 
 function route() {
@@ -525,7 +527,7 @@ function renderNewsletter() {
 function renderSuggest() {
   const draft = store.get('suggestDraft', '');
   const STATUS = { done: ['green', '✓ Built'], planned: ['navy', 'Coming next'] };
-  const entries = CONTEST.entries;
+  const st = members.state();
   main.innerHTML = `
   <h1>Suggestion Box</h1>
   <section class="card" aria-labelledby="contest-h">
@@ -533,12 +535,12 @@ function renderSuggest() {
     <h2 id="contest-h" style="margin-top:6px">The Best Thing Worth Saying</h2>
     <ul class="checklist">${CONTEST.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
     <p class="note">Entries close ${esc(CONTEST.closes)}.</p>
-    ${entries.length ? '' : '<div class="banner"><p><strong>No entries yet.</strong> Be the first to write the Best Thing Worth Saying.</p></div>'}
+    <div id="entries" aria-live="polite">${st.configured ? '<p class="note">Loading entries…</p>' : '<div class="banner"><p><strong>No entries yet.</strong> Be the first to write the Best Thing Worth Saying.</p></div>'}</div>
     <form id="sug-form" style="margin-top:6px"><label for="sug">Your entry</label>
       <textarea id="sug" rows="3" maxlength="280" placeholder="280 letters or less.">${esc(draft)}</textarea>
       <p class="note" id="sug-count" aria-live="polite" style="margin:4px 0 0">${draft.length} of 280 letters</p>
-      <div class="btn-row"><button class="btn red" type="submit">Save my entry</button></div>
-      <p class="note">Your entry is saved on this phone. It goes to the contest as soon as member sign-in is turned on.</p></form>
+      <div class="btn-row" id="sug-actions"><button class="btn red" type="submit">Save my entry</button></div>
+      <p class="note" id="sug-note">Your entry is saved on this phone. It goes to the contest as soon as member sign-in is turned on.</p></form>
   </section>
   <section class="card" aria-labelledby="ideas-h">
     <h2 id="ideas-h" style="margin-top:0">The No2 Plan</h2>
@@ -547,7 +549,128 @@ function renderSuggest() {
       return `<li><strong>${esc(d.t)}</strong><span class="tag ${c}">${l}</span></li>`; }).join('')}</ul>
   </section>`;
   $('#sug').addEventListener('input', (e) => { $('#sug-count').textContent = `${e.target.value.length} of 280 letters`; });
-  $('#sug-form').addEventListener('submit', (e) => { e.preventDefault(); store.set('suggestDraft', $('#sug').value); toast('Saved on this phone.'); });
+  const form = $('#sug-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = $('#sug').value.trim();
+    store.set('suggestDraft', $('#sug').value);
+    const now = members.state();
+    if (!now.member) { toast(now.configured ? 'Saved on this phone. Join No2 to send it.' : 'Saved on this phone.'); return; }
+    if (text.length < 3) { toast('Please write a little more.'); return; }
+    const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
+    try { await members.submitEntry(text); store.del('suggestDraft'); toast('Your entry is in. Good luck!'); renderSuggest(); }
+    catch (err) { toast(err.message || 'Could not send. Check your signal and try again.'); btn.disabled = false; }
+  });
+  if (!st.configured) return;
+  members.start().then(async (now) => {
+    if (!document.body.contains(form)) return;
+    if (now.member) {
+      form.querySelector('button[type=submit]').textContent = 'Send my entry';
+      $('#sug-note').textContent = `You are entering as ${now.member.nick}. One entry per month.`;
+    } else {
+      $('#sug-actions').insertAdjacentHTML('beforeend', '<a class="btn" href="#/account">Join No2 to send it</a>');
+      $('#sug-note').textContent = 'Only members can send entries and see everyone’s entries. Joining is free.';
+    }
+    let list = [];
+    try { list = await members.listEntries(); } catch (err) { console.error(err); }
+    if (!$('#entries')) return;
+    const mine = now.member && list.some((x) => x.uid === now.member.uid);
+    if (mine) { form.hidden = true; }
+    $('#entries').innerHTML = list.length
+      ? `<ol class="entries">${list.map((x, i) => `<li class="entry ${now.member && x.uid === now.member.uid ? 'mine' : ''}"><span class="rank" aria-hidden="true">${i + 1}</span>
+          <div><p class="quote">“${esc(x.text)}”</p><p class="meta">— ${esc(x.nick)}</p></div></li>`).join('')}</ol>
+         ${mine ? '<p class="note">✓ Your entry is in for this month. Voting opens soon: one vote per verified account.</p>' : ''}`
+      : `<div class="banner"><p><strong>No entries yet${now.user ? '' : ' that you can see'}.</strong> ${now.user ? 'Be the first to write the Best Thing Worth Saying.' : 'Join No2 to see and send entries.'}</p></div>`;
+  });
+}
+
+/* =====================================================================
+   MY ACCOUNT (real members)
+   ===================================================================== */
+const GOOGLE_G = '<svg viewBox="0 0 48 48" width="22" height="22" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.2l7.9 6.2C12.4 13.7 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.5 28.6A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.2A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.8c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.2-13.5-10l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>';
+const MEMBER_RULES = [
+  'No money moves through No2. Settle up in person, after you inspect.',
+  'Follow Colorado and federal law. Gun sales and trades go through a licensed dealer for a background check.',
+  'No illegal items, like magazines over 15 rounds.',
+  'Meet in public. Never share your home address.',
+  'Be honest. Members with several low ratings get a “Use Caution” label.',
+];
+
+function renderAccount() {
+  const st = members.state();
+  if (!st.configured) {
+    main.innerHTML = `<h1>My Account</h1>
+      <div class="card"><h2 style="margin-top:0">Member sign-up is almost ready</h2>
+      <p>The owner of No2 is turning on member accounts. Check back soon.</p>
+      <p class="note">Until then you can look around, practice a deal, and use the Library.</p></div>`;
+    return;
+  }
+  main.innerHTML = '<h1>My Account</h1><div class="card"><p>Loading…</p></div>';
+  members.start().then(paintAccount).catch((e) => { console.error(e); main.innerHTML = '<h1>My Account</h1><div class="card"><p><strong>Could not reach No2’s member service.</strong> Check your signal and try again.</p></div>'; });
+}
+
+function paintAccount() {
+  if (!location.hash.startsWith('#/account')) return;
+  const { user, member } = members.state();
+  if (!user) {
+    main.innerHTML = `
+    <h1>Join Colorado No2</h1>
+    <p class="lede">Free for Coloradans. Sign in with your Google account, then pick a nickname.</p>
+    <div class="card">
+      <button class="btn block google" id="google-btn">${GOOGLE_G} Continue with Google</button>
+      <p class="note" style="margin-top:12px"><strong>Your privacy:</strong> Google tells No2 your email so you can sign in. No2 never shows it to anyone. Your No2 profile only has the nickname you pick.</p>
+    </div>`;
+    $('#google-btn').addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try { await members.signIn(); } catch (err) { console.error(err); toast('Sign-in did not work. Please try again.'); }
+      paintAccount();
+    });
+    return;
+  }
+  if (!member) {
+    main.innerHTML = `
+    <h1>Pick your nickname</h1>
+    <p class="lede">This is the name other members see. <strong>Don’t use your real name.</strong></p>
+    <form class="card" id="join-form" novalidate>
+      <label for="nick">Nickname</label>
+      <input id="nick" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="20" placeholder="Example: HighPlainsHank" aria-describedby="nick-help nick-err" required>
+      <p class="note" id="nick-help" style="margin:4px 0 10px">3 to 20 letters, numbers or _ . It can’t be changed later.</p>
+      <fieldset style="border:0;padding:0;margin:0"><legend class="sr-only">Agreements</legend>
+        <label class="check"><input type="checkbox" id="ok-co" required> I live in Colorado.</label>
+        <label class="check"><input type="checkbox" id="ok-age" required> I am 18 or older. (You must be 21 to buy a gun in Colorado.)</label>
+        <label class="check"><input type="checkbox" id="ok-rules" required> I agree to the No2 member rules:</label>
+        <ul class="checklist" style="margin-left:30px">${MEMBER_RULES.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
+      </fieldset>
+      <p class="legal" id="nick-err" role="alert" hidden></p>
+      <div class="btn-row"><button class="btn red" type="submit">Join No2</button><button class="btn ghost" type="button" id="out-btn">Sign out</button></div>
+    </form>`;
+    $('#out-btn').addEventListener('click', async () => { await members.signOutMember(); paintAccount(); });
+    $('#join-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = $('#nick-err'); const nick = $('#nick').value.trim();
+      const fail = (m) => { err.textContent = m; err.hidden = false; };
+      if (!members.NICK_RULE.test(nick)) return fail('Nickname: use 3 to 20 letters, numbers or _ only.');
+      if (!$('#ok-co').checked || !$('#ok-age').checked || !$('#ok-rules').checked) return fail('Please check all three boxes to join.');
+      const btn = e.submitter || e.target.querySelector('[type=submit]'); btn.disabled = true; err.hidden = true;
+      try { await members.createMember({ nick }); toast(`Welcome to No2, ${nick}!`); paintAccount(); }
+      catch (x) { fail(x.message || 'Could not join. Check your signal and try again.'); btn.disabled = false; }
+    });
+    return;
+  }
+  const since = member.since && member.since.toDate ? member.since.toDate().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'today';
+  main.innerHTML = `
+  <h1>My Account</h1>
+  <div class="card">
+    <div class="profile-head"><span class="avatar" aria-hidden="true">${esc(member.nick[0].toUpperCase())}</span>
+      <div><h2 style="margin:0">${esc(member.nick)}</h2><div class="meta">${verifyTag(member)} <span>Member since ${esc(since)}</span></div></div></div>
+    <div class="divider" role="presentation"></div>
+    <h3>Get verified</h3>
+    <p>Verified members get more trades. Phone, Picture and Photo ID checks are coming next.</p>
+    <h3>Your ratings</h3>
+    <p>No ratings yet. They appear here after your first deal.</p>
+    <div class="btn-row"><a class="btn" href="#/suggest">Enter the contest</a><button class="btn ghost" id="out-btn">Sign out</button></div>
+  </div>`;
+  $('#out-btn').addEventListener('click', async () => { await members.signOutMember(); toast('Signed out.'); paintAccount(); });
 }
 
 /* =====================================================================

@@ -1,8 +1,8 @@
 /* Colorado No2 service worker: fast loads + offline. */
-const VERSION = 'no2-v2';
+const VERSION = 'no2-v3';
 const SHELL = [
   './', './index.html', './offline.html', './manifest.webmanifest',
-  './css/app.css', './js/app.js', './js/data.js',
+  './css/app.css', './js/app.js', './js/data.js', './js/members.js', './js/firebase-config.js',
   './fonts/stencil.woff2', './fonts/baskerville.woff2', './fonts/baskerville-italic.woff2',
   './art/parchment.svg', './art/stars-circle.svg', './art/eagle.svg', './art/bell.svg', './art/quill.svg', './art/flag.svg',
   './icons/icon-192.png', './icons/icon-512.png', './icons/favicon-32.png', './icons/apple-touch-icon.png',
