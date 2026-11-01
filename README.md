@@ -1,31 +1,32 @@
 # Colorado No2 — The Right Rite
 
-A Progressive Web App (installable website) for Colorado's Second Amendment community.
-No Google Play Store or Apple App Store involved: Android and iPhone use the same site.
+A Progressive Web App (installable website) that teaches Coloradans about their rights.
+Education comes first; the members' Trading Post is second. No Google Play Store or Apple App Store.
 
-**Live address (after GitHub Pages is turned on):** https://launch26000-xi.github.io/calculator-app/
+**Live:** https://launch26000-xi.github.io/calculator-app/ (GitHub Pages, deployed from this branch)
 
-## Stage 1 (built)
-- Trading Post home with 11 categories, sample listings, rough distances only, radius slider (10 mi / 50 mi / whole state)
-- Deal steps: Offer → Counter → Lock It In → Meet and Inspect → Deal Done → 1–5 star ratings; 5 negotiation tips; no money moves through the app
-- Member profiles with verification labels (Photo ID / Picture / Phone / Not Verified) and "Use Caution" (3+ ratings of ≤2 stars)
-- No2's Library Q&A with "not legal advice" notice, Constitutional view note, source labels and official links
-- Messages / Newsletter / Suggestion Box placeholders, Settings with Install No2 (Android prompt + iPhone picture guide)
-- Manifest, icons (48–512 + maskable), service worker (offline + offline page)
+## What's in it
+- **Foundation** (home): ten dated lessons with real sources, and The Pyramid graphic
+- **Law Watch**: current Colorado and federal gun laws with official links and the Constitutional view note
+- **No2's Library**: 25 questions and answers, each with an official source and "not legal advice"
+- **Recommended Reading**: Tenth Amendment Center articles (real headlines and links, our own summaries, credited to Michael Boldin and the TAC)
+- **Trading Post**: real member listings only, OpenStreetMap with fuzzy circles (about 7-mile squares, never exact spots), radius ring (10 mi / 50 mi / whole state), Colorado only
+- **Deals**: Offer, Counter, Lock It In, Meet at a gun shop (gun listings), Meet and Inspect, Deal Done, 1–5 star ratings and reviews; "Use Caution" after 3+ ratings of 2 stars or less
+- **Messages**: private member-to-member chat with safety tips
+- **Suggestion Box**: "The Best Thing Worth Saying" contest; credit or anonymous; one vote per verified member; ranked by votes
+- **Newsletter**, **Sponsors** ($50 / $150 / $300 and a request form), **Events and Ranges**, **My Account**, **No2 Staff** page
+
+## Member service (Firebase)
+Member features turn on when the Firebase web settings are pasted into `js/firebase-config.js`
+and `firestore.rules` is published in the Firebase console. Staff are added by creating a document
+in the `admins` collection whose ID is the member's user ID.
 
 ## Files
-- `index.html`, `css/app.css`, `js/app.js`, `js/data.js` — the app (plain HTML/CSS/JS, no build step)
-- `manifest.webmanifest`, `sw.js`, `offline.html` — PWA parts
-- `art/`, `icons/`, `fonts/` — artwork, app icons, self-hosted fonts
-- `tools/` — scripts that regenerate art, icons and the PDFs
-- `for-jason/` — the plan and the one-page "Check My Work" PDFs
-
-## Run locally
-Any static server works, e.g. `npx http-server -p 8080` then open http://localhost:8080/
-
-## Test results (Lighthouse 13, mobile)
-Performance 97–99 · Accessibility 100 · Best Practices 100 · SEO 100.
-Chrome installability check: no errors. Offline: works for visited pages; unknown pages show `offline.html`.
-(Lighthouse 12+ no longer has a separate "PWA" score, so installability was checked with Chrome's own install check.)
+- `index.html`, `css/`, `js/app.js` (shell + education screens), `js/live.js` (member screens), `js/members.js` (database calls), `js/map.js`, `js/ui.js`
+- `js/content/` — lessons, laws, Library, reading list, places
+- `js/vendor/` — Firebase and Leaflet, bundled from npm by `tools/firebase-bundle` (`npm install && npm run build`)
+- `firestore.rules` — database safety rules; `tests/` — rules tests and the end-to-end member flow test (run with the Firebase emulators)
+- `manifest.webmanifest`, `sw.js`, `offline.html`, `icons/`, `art/`, `fonts/`
+- `for-jason/No2-Check-My-Work.pdf`
 
 When updating app files, bump `VERSION` in `sw.js` so phones pick up the new version.

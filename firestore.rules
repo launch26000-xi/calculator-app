@@ -1,17 +1,33 @@
 rules_version = '2';
 // Colorado No2 database rules.
-// Members can only create and change their own records. Everything else is closed.
+// Members can only create and change their own records. No addresses, real names or emails are stored.
+// Locations are only a rough grid square (gy = latitude x 10, gx = longitude x 10, whole numbers), Colorado only.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    function isMember() { return signedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid)); }
+    function me() { return request.auth.uid; }
+    function path(c, id) { return /databases/$(database)/documents/$(c)/$(id); }
+    function member(u) { return get(path('members', u)); }
+    function isMember() { return signedIn() && exists(path('members', me())); }
+    function isAdmin() { return signedIn() && exists(path('admins', me())); }
+    function isVerified() { return isMember() && member(me()).data.verify != 'none'; }
     function validNick(n) { return n is string && n.matches('^[A-Za-z0-9_]{3,20}$'); }
+    function str(v, lo, hi) { return v is string && v.size() >= lo && v.size() <= hi; }
+    function validGrid(gy, gx) { return gy is int && gx is int && gy >= 370 && gy <= 409 && gx >= -1091 && gx <= -1021; }
+    function cats() { return ['handguns', 'long-guns', 'shotguns', 'hunting', 'slingshots', 'bear-mace', 'self-defense', 'bows', 'accessories', 'knives', 'collectors']; }
+    function firearmCats() { return ['handguns', 'long-guns', 'shotguns', 'hunting', 'collectors']; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
-    // Member profiles: nickname only. No real names, emails or addresses are stored.
+    match /admins/{uid} {
+      allow read: if signedIn() && me() == uid;
+      allow write: if false;          // added by the owner in the Firebase console only
+    }
+
+    // ---------- Members ----------
     match /members/{uid} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.auth.uid == uid
+      allow create: if signedIn() && me() == uid
         && request.resource.data.keys().hasOnly(['nick', 'verify', 'since', 'colorado', 'adult', 'rulesOk'])
         && validNick(request.resource.data.nick)
         && request.resource.data.verify == 'none'
@@ -19,38 +35,216 @@ service cloud.firestore {
         && request.resource.data.adult == true
         && request.resource.data.rulesOk == true
         && request.resource.data.since == request.time
-        // nickname must be claimed in the same save
-        && getAfter(/databases/$(database)/documents/nicknames/$(request.resource.data.nick.lower())).data.uid == uid;
-      allow update: if false;   // nickname and verification can't be changed by the member
-      allow delete: if signedIn() && request.auth.uid == uid;
+        && getAfter(path('nicknames', request.resource.data.nick.lower())).data.uid == uid;
+      // A member may set only their rough area. Only an admin may set the verification label.
+      allow update: if (signedIn() && me() == uid && changed().hasOnly(['gy', 'gx'])
+                        && validGrid(request.resource.data.gy, request.resource.data.gx))
+                    || (isAdmin() && changed().hasOnly(['verify'])
+                        && request.resource.data.verify in ['photoid', 'picture', 'phone', 'none']);
+      allow delete: if signedIn() && me() == uid;
     }
 
-    // One document per nickname (lower case) so no two members share a name.
     match /nicknames/{nick} {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['uid'])
-        && request.resource.data.uid == request.auth.uid
-        && getAfter(/databases/$(database)/documents/members/$(request.auth.uid)).data.nick.lower() == nick;
+        && request.resource.data.uid == me()
+        && getAfter(path('members', me())).data.nick.lower() == nick;
       allow update: if false;
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == me();
     }
 
-    // "The Best Thing Worth Saying" contest: one entry per member per month.
-    // Entry id is "<month>_<uid>", e.g. "2026-11_abc123".
-    match /contestEntries/{entryId} {
+    // ---------- Trading Post ----------
+    function listingFieldsOk(d) {
+      return d.cat in cats() && str(d.title, 3, 80) && str(d.desc, 0, 1000)
+        && (d.price == null || (d.price is int && d.price >= 0 && d.price <= 1000000))
+        && d.deal in ['Sell', 'Trade', 'Trade or Sell'] && str(d.cond, 1, 40)
+        && d.status in ['open', 'closed'];
+    }
+    match /listings/{id} {
       allow read: if signedIn();
       allow create: if isMember()
-        && entryId == request.resource.data.month + '_' + request.auth.uid
-        && request.resource.data.keys().hasOnly(['uid', 'nick', 'text', 'month', 'createdAt'])
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.nick == get(/databases/$(database)/documents/members/$(request.auth.uid)).data.nick
-        && request.resource.data.text is string
-        && request.resource.data.text.size() >= 3 && request.resource.data.text.size() <= 280
-        && request.resource.data.month.matches('^[0-9]{4}-[0-9]{2}$')
+        && request.resource.data.keys().hasOnly(['uid', 'nick', 'cat', 'title', 'desc', 'price', 'deal', 'cond', 'gy', 'gx', 'status', 'createdAt'])
+        && request.resource.data.keys().hasAll(['uid', 'nick', 'cat', 'title', 'desc', 'price', 'deal', 'cond', 'gy', 'gx', 'status', 'createdAt'])
+        && request.resource.data.uid == me()
+        && request.resource.data.nick == member(me()).data.nick
+        && listingFieldsOk(request.resource.data)
+        && request.resource.data.status == 'open'
+        && validGrid(request.resource.data.gy, request.resource.data.gx)
+        && request.resource.data.gy == member(me()).data.gy
+        && request.resource.data.gx == member(me()).data.gx
         && request.resource.data.createdAt == request.time;
+      allow update: if signedIn() && resource.data.uid == me()
+        && changed().hasOnly(['status', 'price', 'title', 'desc', 'cond'])
+        && listingFieldsOk(request.resource.data);
+      allow delete: if signedIn() && (resource.data.uid == me() || isAdmin());
+    }
+
+    // ---------- Deals: Offer, Counter, Lock It In, (Meet at a gun shop), Meet and Inspect, Deal Done ----------
+    function flagOk(b, a, f) { return a[f] is bool && (b[f] == false || a[f] == true); }
+    function lastOffer(d) { return d.offers[d.offers.size() - 1]; }
+    function dealUpdateOk(b, a) {
+      let mine = me() == b.buyer ? ['lockB', 'shopB', 'metB', 'doneB'] : ['lockS', 'shopS', 'metS', 'doneS'];
+      let keys = a.diff(b).affectedKeys();
+      let newOffer = keys.hasAny(['offers']);
+      let accepting = keys.hasAny(['agreed']);
+      let locking = keys.hasAny(['locked']);
+      return keys.hasOnly(mine.concat(['offers', 'agreed', 'locked', 'lockedAt', 'updatedAt']))
+        && a.updatedAt == request.time
+        && flagOk(b, a, 'lockB') && flagOk(b, a, 'lockS') && flagOk(b, a, 'shopB') && flagOk(b, a, 'shopS')
+        && flagOk(b, a, 'metB') && flagOk(b, a, 'metS') && flagOk(b, a, 'doneB') && flagOk(b, a, 'doneS')
+        // a new offer or counter: only before agreement, appended, taking turns
+        && (!newOffer || (b.agreed == null && !accepting
+              && a.offers.size() == b.offers.size() + 1
+              && a.offers[0:b.offers.size()] == b.offers
+              && lastOffer(a).keys().hasOnly(['by', 'text']) && lastOffer(a).by == me()
+              && lastOffer(b).by != me() && str(lastOffer(a).text, 1, 100)))
+        // accepting the other member's last offer
+        && (!accepting || (b.agreed == null && lastOffer(b).by != me() && a.agreed == lastOffer(b).text))
+        // Lock It In needs an agreed price; when both have locked, the item, price and time freeze
+        && ((!a.lockB && !a.lockS) || a.agreed != null)
+        && (!locking || (b.locked == null && a.lockB && a.lockS
+              && a.locked == { 'item': b.title, 'price': a.agreed } && a.lockedAt == request.time))
+        && (keys.hasAny(['lockedAt']) == locking)
+        && (!(a.lockB && a.lockS) || a.locked != null)
+        // gun deals: both agree to meet at a licensed gun shop for the background check
+        && ((!a.shopB && !a.shopS) || (b.firearm && a.locked != null))
+        && ((!a.metB && !a.metS) || (a.locked != null && (!b.firearm || (a.shopB && a.shopS))))
+        && ((!a.doneB && !a.doneS) || (a.metB && a.metS));
+    }
+    match /deals/{id} {
+      allow read: if signedIn() && (me() in resource.data.parties || isAdmin());
+      allow create: if isMember()
+        && id == request.resource.data.listingId + '_' + me()
+        && request.resource.data.keys().hasOnly(['listingId', 'seller', 'buyer', 'parties', 'firearm', 'title', 'offers', 'agreed',
+             'lockB', 'lockS', 'locked', 'lockedAt', 'shopB', 'shopS', 'metB', 'metS', 'doneB', 'doneS', 'createdAt', 'updatedAt'])
+        && request.resource.data.buyer == me()
+        && get(path('listings', request.resource.data.listingId)).data.status == 'open'
+        && request.resource.data.seller == get(path('listings', request.resource.data.listingId)).data.uid
+        && request.resource.data.seller != me()
+        && request.resource.data.parties == [me(), request.resource.data.seller]
+        && request.resource.data.firearm == (get(path('listings', request.resource.data.listingId)).data.cat in firearmCats())
+        && request.resource.data.title == get(path('listings', request.resource.data.listingId)).data.title
+        && request.resource.data.offers.size() == 1
+        && request.resource.data.offers[0].keys().hasOnly(['by', 'text'])
+        && request.resource.data.offers[0].by == me() && str(request.resource.data.offers[0].text, 1, 100)
+        && request.resource.data.agreed == null && request.resource.data.locked == null && request.resource.data.lockedAt == null
+        && request.resource.data.lockB == false && request.resource.data.lockS == false
+        && request.resource.data.shopB == false && request.resource.data.shopS == false
+        && request.resource.data.metB == false && request.resource.data.metS == false
+        && request.resource.data.doneB == false && request.resource.data.doneS == false
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      allow update: if signedIn() && me() in resource.data.parties && dealUpdateOk(resource.data, request.resource.data);
+      allow delete: if false;
+    }
+
+    // Ratings: 1 to 5 stars and a short review, once per member per finished deal.
+    match /ratings/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && id == request.resource.data.dealId + '_' + me()
+        && request.resource.data.keys().hasOnly(['dealId', 'from', 'to', 'stars', 'review', 'createdAt'])
+        && request.resource.data.from == me()
+        && me() in get(path('deals', request.resource.data.dealId)).data.parties
+        && request.resource.data.to in get(path('deals', request.resource.data.dealId)).data.parties
+        && request.resource.data.to != me()
+        && get(path('deals', request.resource.data.dealId)).data.doneB == true
+        && get(path('deals', request.resource.data.dealId)).data.doneS == true
+        && request.resource.data.stars is int && request.resource.data.stars >= 1 && request.resource.data.stars <= 5
+        && str(request.resource.data.review, 0, 500)
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // ---------- Private messages between two members ----------
+    match /convos/{cid} {
+      allow read: if signedIn() && me() in resource.data.parties;
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['parties', 'nicks', 'updatedAt', 'last'])
+        && request.resource.data.parties.size() == 2
+        && me() in request.resource.data.parties
+        && request.resource.data.parties[0] < request.resource.data.parties[1]
+        && cid == request.resource.data.parties[0] + '_' + request.resource.data.parties[1]
+        && request.resource.data.nicks[request.resource.data.parties[0]] == member(request.resource.data.parties[0]).data.nick
+        && request.resource.data.nicks[request.resource.data.parties[1]] == member(request.resource.data.parties[1]).data.nick
+        && request.resource.data.updatedAt == request.time && str(request.resource.data.last, 0, 120);
+      allow update: if signedIn() && me() in resource.data.parties
+        && changed().hasOnly(['updatedAt', 'last'])
+        && request.resource.data.updatedAt == request.time && str(request.resource.data.last, 0, 120);
+      allow delete: if false;
+
+      match /messages/{mid} {
+        allow read: if signedIn() && me() in get(path('convos', cid)).data.parties;
+        allow create: if signedIn() && me() in get(path('convos', cid)).data.parties
+          && request.resource.data.keys().hasOnly(['from', 'text', 'createdAt'])
+          && request.resource.data.from == me()
+          && str(request.resource.data.text, 1, 1000)
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------- "The Best Thing Worth Saying" contest ----------
+    // Entries never store who wrote them. A private "claim" (readable only by its owner) limits one entry per month.
+    match /contestEntries/{id} {
+      allow read: if signedIn();
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['month', 'text', 'credit', 'nick', 'votes', 'createdAt'])
+        && request.resource.data.month.matches('^[0-9]{4}-[0-9]{2}$')
+        && str(request.resource.data.text, 3, 280)
+        && request.resource.data.credit in ['name', 'anonymous']
+        && request.resource.data.nick == (request.resource.data.credit == 'name' ? member(me()).data.nick : null)
+        && request.resource.data.votes == 0
+        && request.resource.data.createdAt == request.time
+        && getAfter(path('contestClaims', request.resource.data.month + '_' + me())).data.entryId == id;
+      // One vote per verified member: the count goes up by exactly one, together with that member's vote record.
+      allow update: if isVerified()
+        && changed().hasOnly(['votes'])
+        && request.resource.data.votes == resource.data.votes + 1
+        && !exists(path('contestVotes', resource.data.month + '_' + me()))
+        && getAfter(path('contestVotes', resource.data.month + '_' + me())).data.entryId == id;
+      allow delete: if false;
+    }
+    match /contestClaims/{cid} {
+      allow read: if signedIn() && resource.data.uid == me();
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['uid', 'entryId', 'month'])
+        && request.resource.data.uid == me()
+        && cid == request.resource.data.month + '_' + me()
+        && getAfter(path('contestEntries', request.resource.data.entryId)).data.month == request.resource.data.month;
+      allow update, delete: if false;
+    }
+    match /contestVotes/{vid} {
+      allow read: if signedIn() && resource.data.uid == me();
+      allow create: if isVerified()
+        && request.resource.data.keys().hasOnly(['uid', 'entryId', 'month'])
+        && request.resource.data.uid == me()
+        && vid == request.resource.data.month + '_' + me()
+        && get(path('contestEntries', request.resource.data.entryId)).data.month == request.resource.data.month
+        && getAfter(path('contestEntries', request.resource.data.entryId)).data.votes == get(path('contestEntries', request.resource.data.entryId)).data.votes + 1
+        // no voting for your own entry
+        && (!exists(path('contestClaims', vid)) || get(path('contestClaims', vid)).data.entryId != request.resource.data.entryId);
+      allow update, delete: if false;
+    }
+
+    // ---------- Sponsors: anyone may send a request; only No2 staff can read them ----------
+    match /sponsorInquiries/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['name', 'business', 'contact', 'level', 'message', 'createdAt'])
+        && str(request.resource.data.name, 1, 80) && str(request.resource.data.business, 0, 120)
+        && str(request.resource.data.contact, 3, 120) && request.resource.data.level in ['50', '150', '300']
+        && str(request.resource.data.message, 0, 1000) && request.resource.data.createdAt == request.time;
+      allow read, delete: if isAdmin();
       allow update: if false;
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // ---------- Events, ranges and classes: public to read, added only by No2 staff ----------
+    match /events/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /ranges/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /{document=**} { allow read, write: if false; }

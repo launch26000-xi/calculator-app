@@ -2,8 +2,8 @@
   "id": "./",
   "name": "Colorado No2",
   "short_name": "No2",
-  "description": "Colorado No2: The Right Rite. A members' Trading Post and Library for Colorado's Second Amendment community.",
-  "start_url": "./#/trade",
+  "description": "Colorado No2: The Right Rite. Teaching Coloradans their rights: daily lessons, Law Watch, a Library and a members' Trading Post.",
+  "start_url": "./#/foundation",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -26,7 +26,8 @@
     { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Trading Post", "url": "./#/trade", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] },
-    { "name": "Library", "url": "./#/library", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] }
+    { "name": "Today's Lesson", "url": "./#/foundation", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Library", "url": "./#/library", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Trading Post", "url": "./#/trade", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }] }
   ]
 }

@@ -1,12 +1,13 @@
 {
-  "name": "no2-firebase-bundle",
+  "name": "no2-vendor-bundle",
   "private": true,
-  "description": "Bundles the parts of the Firebase SDK that No2 uses into js/vendor/firebase.js. Run: npm install && npm run build",
+  "description": "Builds the outside code No2 keeps inside the app: Firebase (sign-in + database) and Leaflet (OpenStreetMap). Run: npm install && npm run build",
   "scripts": {
-    "build": "esbuild entry.js --bundle --format=esm --minify --target=es2020 --outfile=../../js/vendor/firebase.js --legal-comments=external"
+    "build": "esbuild entry.js --bundle --format=esm --minify --target=es2020 --outfile=../../js/vendor/firebase.js --legal-comments=external && esbuild node_modules/leaflet/dist/leaflet-src.esm.js --minify --format=esm --outfile=../../js/vendor/leaflet.js && cp node_modules/leaflet/dist/leaflet.css ../../css/leaflet.css && cp node_modules/leaflet/LICENSE ../../js/vendor/leaflet.LICENSE.txt"
   },
   "dependencies": {
-    "firebase": "12.6.0"
+    "firebase": "12.6.0",
+    "leaflet": "1.9.4"
   },
   "devDependencies": {
     "esbuild": "0.25.10"

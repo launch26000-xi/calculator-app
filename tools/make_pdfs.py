@@ -48,38 +48,35 @@ def bullets(items):
 # ---------------- One-page "Check My Work" ----------------
 def check_my_work():
     doc = SimpleDocTemplate(os.path.join(OUT, 'No2-Check-My-Work.pdf'), pagesize=letter,
-                            leftMargin=0.6*inch, rightMargin=0.6*inch, topMargin=0.5*inch, bottomMargin=0.45*inch,
+                            leftMargin=0.55*inch, rightMargin=0.55*inch, topMargin=0.45*inch, bottomMargin=0.4*inch,
                             title='Colorado No2 - Check My Work', author='Colorado No2')
     st = []
-    header(st, 'Colorado No2: Check My Work', 'The Right Rite. Stage 1 test sheet.')
-    st.append(Paragraph('Open this address in <b>Chrome</b> on your Android phone:', P))
-    st.append(Paragraph(URL, BIG))
-    st.append(Paragraph('(It works after you do the 3 setup steps in the plan. Until then this address shows "404".)', SMALL))
-    st.append(Spacer(1, 4))
+    header(st, 'Colorado No2: Check My Work', 'The Right Rite. Education first.')
+    st.append(Paragraph('Open this in <b>Chrome</b> on your Android phone: <font color="#C8102E"><b>' + URL + '</b></font>', P))
     st.append(Paragraph('Test it. Check each box when it works.', H2))
     st.append(boxlist([
-        'You see the <b>No2 crate logo</b>, "The Right Rite", and the <b>Trading Post</b> first.',
-        'Slide <b>How far will you go?</b> to <b>10 miles</b>. Fewer items show (4). Slide back to <b>Whole state</b>. All 22 show.',
-        'Tap <b>Knives</b> at the top of the list. Only knives show. Tap <b>All</b> to go back.',
-        'Tap any item. It says something like "about 12 miles away." It <b>never</b> shows an address.',
-        'Open the <b>Remington 870</b>. Type <b>$300</b>, tap <b>Send Offer</b>, then <b>Accept</b>. Tap <b>Lock It In</b> and the demo button. A ticket stamped <b>LOCKED</b> shows the item, price and time. Finish the steps and give stars.',
-        'Open the <b>Mossberg 500 youth</b> and tap the seller, <b>ElkCreekEd</b>. You see <b>Not Verified</b> and a red <b>Use Caution</b> label.',
-        'Tap <b>Library</b> at the bottom. Type <b>background check</b> and tap <b>Ask</b>. You see "No2\'s Library," a <b>Constitutional view</b> box, and "This is information, not legal advice."',
-        'Tap <b>Messages</b>, <b>Newsletter</b> and <b>Suggestion Box</b> at the bottom. Each one opens.',
-        'Tap the <b>gear</b> at the top right. Tap the red <b>Install No2</b> button, then <b>Install</b>. The crate icon lands on your home screen. Open it: <b>no browser bar</b>.',
-        'Turn on <b>airplane mode</b>. Open No2 from your home screen. It still works. Turn airplane mode off.',
+        'The first screen is <b>Foundation</b>. You see <b>Today’s lesson</b> and <b>The Pyramid</b> of bricks, with A RULE in red on top and THE CONSTITUTION in navy at the bottom.',
+        'Tap any of the <b>10 lessons</b>. Each one has a date and a <b>Sources</b> list with real links.',
+        'Tap <b>More</b>, then <b>Law Watch</b>. Each law has a plain summary and an official link.',
+        'Tap <b>Library</b>. You see <b>25 questions</b>. Tap one. It says “No2’s Library” and “This is information, not legal advice.”',
+        'Tap <b>More</b>, then <b>Recommended Reading</b>. Each article credits Michael Boldin and the Tenth Amendment Center.',
+        'Tap <b>Trading Post</b>. You see a <b>map of Colorado</b> and the distance slider. There are no fake items.',
+        'Tap <b>More</b>, then <b>Newsletter</b>. It has the crate masthead, all sections, and a sign-off from you.',
+        'Tap <b>More</b>, then <b>Sponsors</b> ($50, $150, $300) and <b>Events and Ranges</b>. Nothing fake is listed.',
+        'After we finish the Firebase setup together: tap the <b>person</b> button at the top, then <b>Continue with Google</b>, and pick a nickname.',
+        'Tap the gear, then the red <b>Install No2</b> button, then <b>Install</b>. The crate icon goes on your home screen.',
     ]))
     st.append(Paragraph('My test scores (out of 100)', H2))
     sc = Table([
-        [Paragraph('<b>Install check</b>', CELL), Paragraph('<b>PASSED.</b> Chrome says No2 can be installed. It works offline and shows a friendly page when there is no signal.', CELL)],
-        [Paragraph('<b>Easy to use for everyone</b><br/>(Accessibility)', CELL), Paragraph('<b>100</b> on every screen I tested.', CELL)],
-        [Paragraph('<b>Speed</b>', CELL), Paragraph('<b>97 to 99.</b> Very fast, even on a phone.', CELL)],
-        [Paragraph('<b>Safe and well built</b><br/>(Best practices)', CELL), Paragraph('<b>100.</b>', CELL)],
-    ], colWidths=[2.1*inch, 5.15*inch])
+        [Paragraph('<b>Easy to use for everyone</b>', CELL), Paragraph('<b>100</b> on every screen I tested.', CELL)],
+        [Paragraph('<b>Safe and well built</b>', CELL), Paragraph('<b>100</b>. (The map screens show 96 here only because my test computer can’t download map pictures.)', CELL)],
+        [Paragraph('<b>Speed</b>', CELL), Paragraph('<b>87 to 95.</b> Fast on a phone.', CELL)],
+        [Paragraph('<b>Member safety rules</b>', CELL), Paragraph('<b>83 of 83</b> break-in tests blocked, like faking a verified badge or skipping the gun-shop step.', CELL)],
+    ], colWidths=[2.0*inch, 5.4*inch])
     sc.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.75, colors.HexColor('#CDBF9E')), ('BACKGROUND', (0,0), (0,-1), PAPER), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     st.append(sc)
-    st.append(Spacer(1, 6))
-    st.append(Paragraph('<b>Good to know:</b> the listings, members and replies are <b>samples</b> for testing. Real sign-ups, real messages and real members come in Stage 2. No money ever moves through No2. No app store is used anywhere.', SMALL))
+    st.append(Spacer(1, 5))
+    st.append(Paragraph('<b>Good to know:</b> nothing on No2 is made up. Where there is no real data yet, it says “Be the first.” Members show on the map only as fuzzy circles, never exact spots. No money moves through No2. No app store is used.', SMALL))
     doc.build(st)
 
 # ---------------- Plan ----------------
@@ -130,5 +127,5 @@ def plan():
     doc.build(st)
 
 os.makedirs(OUT, exist_ok=True)
-check_my_work(); plan()
+check_my_work()
 print('PDFs written to', os.path.abspath(OUT))
