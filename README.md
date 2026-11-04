@@ -30,3 +30,7 @@ in the `admins` collection whose ID is the member's user ID.
 - `for-jason/No2-Check-My-Work.pdf`
 
 When updating app files, bump `VERSION` in `sw.js` so phones pick up the new version.
+
+## Also in this repository
+- `mindmovie/` — **Mind Movie**, a separate vision-board video maker PWA (multi-track timeline). See `mindmovie/README.md`.
+  Live at https://launch26000-xi.github.io/no.2/mindmovie/ once this branch is the GitHub Pages source.
