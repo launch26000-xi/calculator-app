@@ -1,10 +1,10 @@
 /* Mind Movie service worker: offline app shell + daily reminder. */
-const VERSION = 'mm-v1';
+const VERSION = 'mm-v2';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/db.js', './js/model.js', './js/core.js', './js/store.js', './js/renderer.js', './js/engine.js',
   './js/ui.js', './js/actions.js', './js/library.js', './js/timeline.js', './js/inspector.js', './js/safety.js',
-  './js/progress.js', './js/player.js', './js/exporter.js',
+  './js/progress.js', './js/player.js', './js/exporter.js', './js/templates.js', './js/help.js', './js/guide.js', './js/joy.js',
   './icons/icon-96.png', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-192.png', './icons/maskable-512.png', './icons/apple-touch-icon.png',
 ];
 

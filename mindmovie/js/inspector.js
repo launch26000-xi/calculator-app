@@ -5,6 +5,7 @@ import { TRACK_TYPES, PROPS, propDef } from './model.js';
 import { fmt, frameOf, parseTime, timing, val, hzOf, effectivePulse, SAFE_HZ, isSaturatedRed } from './core.js';
 import { deleteClip, duplicateClip, splitClip, setTrack, applyPreset, savePreset, deletePreset, deleteTrack, duplicateTrack } from './actions.js';
 import * as engine from './engine.js';
+import { helpBtn } from './help.js';
 
 let root, body, selfEdit = false, live = [];
 
@@ -204,7 +205,7 @@ function followSection(clip, track) {
     const info = mc && engine.beatInfo(mc.mediaId);
     status = !mc ? 'That track has no audio clips yet.' : info ? `Detected ${info.bpm} BPM, ${info.beats.length} beats.` : 'Detecting beats…';
   } else if (target) status = 'Copies the on/off timing and waveform of “' + target.name + '”.';
-  return h('div', { class: 'group' }, h('h3', {}, icon('link'), ' Follow pattern'),
+  return h('div', { class: 'group' }, h('h3', {}, icon('link'), ' Follow pattern ', helpBtn('pulse')),
     h('p', { class: 'muted small' }, 'Link this clip’s pulse to another track — for example, flash on the beat of the music.'),
     h('div', { class: 'prop' }, h('label', {}, 'Follow track'), tSel),
     isAudio ? h('div', { class: 'prop' }, h('label', {}, 'Mode'), mSel) : null,
@@ -217,7 +218,7 @@ function presetSection(clip, track) {
   const list = state.presets.filter((p) => p.type === track.type);
   const sel = h('select', { 'aria-label': 'Preset', disabled: track.lock }, h('option', { value: '' }, list.length ? 'Choose a preset to apply…' : 'No presets for this type yet'), list.map((p) => h('option', { value: p.id }, p.name + (p.starter ? '' : ' (mine)'))));
   sel.addEventListener('change', () => { const p = list.find((x) => x.id === sel.value); if (!p) return; applyPreset(clip.id, p); toast('Applied “' + p.name + '” (Undo to go back)'); });
-  return h('div', { class: 'group' }, h('h3', {}, icon('star'), ' Presets'),
+  return h('div', { class: 'group' }, h('h3', {}, icon('star'), ' Presets ', helpBtn('sliders')),
     h('div', { class: 'row' }, sel),
     h('div', { class: 'row' },
       h('button', { class: 'btn sm', onclick: async () => { const n = await prompt('Name this preset', TRACK_TYPES[track.type].short + ' preset'); if (n && n.trim()) { await savePreset(n.trim(), clip, track.type); toast('Preset saved'); } } }, icon('save'), ' Save my settings as a preset'),
@@ -249,7 +250,7 @@ function timingSection(clip, track) {
   const setStart = (v) => edit(() => { clip.start = Math.max(0, Math.round(v)); });
   const setEnd = (v) => edit(() => { clip.dur = Math.max(minDur, Math.round(v - clip.start)); });
   const setDur = (v) => edit(() => { clip.dur = Math.max(minDur, Math.round(v)); });
-  return h('div', { class: 'group' }, h('h3', {}, icon('clock'), ' Timing'),
+  return h('div', { class: 'group' }, h('h3', {}, icon('clock'), ' Timing ', helpBtn('timeline')),
     h('div', { class: 'tgrid' },
       timeField('Start', () => clip.start, setStart, track),
       timeField('End', () => clip.start + clip.dur, setEnd, track),
@@ -303,7 +304,7 @@ function clipPanel(track, clip) {
     }
     if (g === 'audio' && (track.type === 'voice' || track.type === 'music' || track.type === 'video') && !('preservesPitch' in HTMLMediaElement.prototype)) extra.push(h('p', { class: 'muted small' }, 'Pitch-preserve is not supported on this browser.'));
     if (g === 'pulse' && track.type === 'flash') extra.push(h('p', { class: 'muted small' }, `Minimum flash is 17 ms (one frame at 60 Hz). Your screen runs at ${timing.hz} Hz, so one frame is ${timing.frameMs.toFixed(1)} ms; flashes are shown on whole frames.`));
-    sections.push(h('div', { class: 'group' }, h('h3', {}, g === 'look' && type.kind === 'audio' ? 'Fades' : GROUP_TITLES[g]), extra, rows.map((d) => propRow(clip, track, d))));
+    sections.push(h('div', { class: 'group' }, h('h3', {}, g === 'look' && type.kind === 'audio' ? 'Fades' : GROUP_TITLES[g], ' ', helpBtn({ pulse: 'pulse', pattern: 'layers', audio: 'layers' }[g] || 'sliders')), extra, rows.map((d) => propRow(clip, track, d))));
   }
   if (type.pulse) sections.push(followSection(clip, track));
   sections.push(presetSection(clip, track));

@@ -2,6 +2,11 @@
 import { h, icon, toast, confirmBox } from './ui.js';
 import { db } from './db.js';
 import { on, emit } from './store.js';
+import { MILESTONES, celebrate, journal, addJournal, removeJournal, faceOf } from './joy.js';
+import { helpBtn } from './help.js';
+import { prompt } from './ui.js';
+
+let entries = [];
 
 let root, days = new Set(), month = new Date(), reminder = { on: false, time: '08:00' };
 
@@ -10,6 +15,7 @@ export const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMont
 export async function loadProgress() {
   days = new Set(await db.kvGet('watched', []));
   reminder = await db.kvGet('reminder', reminder);
+  entries = await journal();
   startReminderLoop();
 }
 
@@ -21,6 +27,13 @@ export async function markWatched(d = new Date()) {
   emit('progress');
   if (isNew) toast(`Watched today ✓ — streak ${streak().current} day${streak().current === 1 ? '' : 's'}`);
   render();
+  const cur = streak().current;
+  const done = await db.kvGet('celebrated', []);
+  if (isNew && MILESTONES.includes(cur) && !done.includes(cur)) {
+    done.push(cur); await db.kvSet('celebrated', done);
+    const msg = { 3: 'Three days in a row! The habit is forming.', 7: 'One full week! Your mind is learning what you want.', 21: '21 days — a real habit now. Keep feeling it!', 30: 'A whole month! Look how far you have come.', 66: '66 days — research says this is when habits become automatic.', 100: '100 days! You are living it.' }[cur] || `${cur} days in a row — amazing commitment!`;
+    celebrate(`🔥 ${cur}-day streak!`, msg);
+  }
 }
 async function unmark(k) { days.delete(k); await db.kvSet('watched', [...days]); emit('progress'); render(); }
 
@@ -39,7 +52,7 @@ export function streak() {
   return { current, best, total: days.size, today: days.has(dayKey()) };
 }
 
-export function mountProgress(el) { root = el; render(); on('progress', render); }
+export function mountProgress(el) { root = el; render(); on('progress', render); on('journal', async () => { entries = await journal(); render(); }); }
 
 function calendar() {
   const y = month.getFullYear(), m = month.getMonth();
@@ -68,6 +81,26 @@ function calendar() {
     h('div', { class: 'cal-grid' }, cells));
 }
 
+function feelingCard() {
+  const last = entries.filter((e) => e.feel).slice(-14);
+  const avg = last.length ? last.reduce((a, e) => a + e.feel, 0) / last.length : 0;
+  const bars = h('div', { class: 'feel-bars', role: 'img', 'aria-label': last.length ? `Last ${last.length} check-ins, average ${avg.toFixed(1)} of 7` : 'No check-ins yet' },
+    last.map((e) => h('div', { class: 'fb', title: new Date(e.at).toLocaleDateString() + ' · ' + e.feel + '/7' }, h('i', { style: { height: (e.feel / 7) * 100 + '%' } }), h('span', {}, faceOf(e.feel)))));
+  return h('section', { class: 'card' }, h('h2', {}, '💫 How I feel ', helpBtn('feel')),
+    last.length ? h('p', { class: 'muted small' }, `Average of your last ${last.length} check-ins: ${faceOf(Math.round(avg))} ${avg.toFixed(1)} / 7`) : h('p', { class: 'muted small' }, 'After you watch, Mind Movie asks how you feel. Your feelings show here as a chart.'),
+    last.length ? bars : null);
+}
+function evidenceCard() {
+  const notes = entries.filter((e) => e.note).slice().reverse();
+  return h('section', { class: 'card' }, h('h2', {}, '📓 Evidence journal'),
+    h('p', { class: 'muted small' }, 'Write down wins, signs and coincidences. Noticing proof makes belief grow.'),
+    h('button', { class: 'btn gold', onclick: async () => { const t = await prompt('Evidence it’s working', '', { multiline: true, placeholder: 'A win, a sign, a nice surprise…' }); if (t && t.trim()) { await addJournal({ at: Date.now(), feel: 0, note: t.trim() }); toast('Added to your evidence journal ✨'); } } }, '+ Add evidence'),
+    notes.length ? h('ul', { class: 'journal' }, notes.slice(0, 30).map((e) => h('li', {},
+      h('div', { class: 'j-head' }, h('small', { class: 'muted' }, new Date(e.at).toLocaleDateString() + (e.feel ? ' · ' + faceOf(e.feel) : '')),
+        h('button', { class: 'btn sm ghost', 'aria-label': 'Delete entry', onclick: async () => { if (await confirmBox('Delete this entry?', e.note, 'Delete', true)) removeJournal(e.at); } }, icon('trash'))),
+      h('p', {}, e.note)))) : h('p', { class: 'empty' }, 'No entries yet.'));
+}
+
 function render() {
   if (!root) return;
   const s = streak();
@@ -84,11 +117,13 @@ function render() {
     toast(reminder.on ? 'Daily reminder on at ' + reminder.time : 'Reminder off');
   });
   root.replaceChildren(h('div', { class: 'prog' },
-    h('section', { class: 'card hero center' },
+    h('section', { class: 'card hero center streak-card' },
       h('div', { class: 'streak-num' }, String(s.current)),
       h('div', { class: 'streak-label' }, s.current === 1 ? 'day streak' : 'day streak'),
       h('div', { class: 'stats' }, h('span', {}, h('strong', {}, s.best), ' best'), h('span', {}, h('strong', {}, s.total), ' days total'), h('span', {}, s.today ? '✓ watched today' : 'not watched yet today')),
       h('button', { class: 'btn primary', disabled: s.today, onclick: () => markWatched() }, icon('check'), s.today ? ' Done for today' : ' I watched today')),
+    feelingCard(),
+    evidenceCard(),
     h('section', { class: 'card' }, h('h2', {}, 'Days watched'), h('p', { class: 'muted small' }, 'Playing your movie to the end in the Play tab marks the day automatically. Tap a day to fix it by hand.'), calendar()),
     h('section', { class: 'card' }, h('h2', {}, icon('bell'), ' Daily reminder'),
       h('label', { class: 'prop toggle' }, cb, h('span', { class: 'sw' }), h('span', {}, 'Remind me every day')),

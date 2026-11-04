@@ -13,6 +13,10 @@ import { mountProgress, loadProgress } from './progress.js';
 import { firstLaunch, beforePlay, setSafeMode, loadSafeMode, toneWarning, trackNeedsToneWarning } from './safety.js';
 import { addTrack, addClip, deleteClip, splitClip, loadPresets } from './actions.js';
 import { exportVideo, saveProjectFile, openProjectFile } from './exporter.js';
+import { helpCenter, helpBtn, showHelp } from './help.js';
+import { initGuide, startTour } from './guide.js';
+import { primeEnabled, setPrime } from './joy.js';
+import { recordVoice } from './library.js';
 
 const TABS = [
   ['library', 'Library', 'lib'],
@@ -21,7 +25,7 @@ const TABS = [
   ['progress', 'Progress', 'star'],
 ];
 const views = {};
-let previewCv, tTime, tDur, playBtn, snapBtn, gridSel, zoomRange, undoBtn, redoBtn, savedEl, projName;
+let loopBtn, previewCv, tTime, tDur, playBtn, snapBtn, gridSel, zoomRange, undoBtn, redoBtn, savedEl, projName;
 let deferredInstall = null;
 
 async function boot() {
@@ -35,11 +39,23 @@ async function boot() {
   const startTab = (location.hash.slice(1) || (await db.kvGet('lastTab', 'library')));
   go(TABS.some((t) => t[0] === startTab) ? startTab : 'library');
   measureRefresh().then(() => emit('timing'));
+  state.userName = await db.kvGet('userName', '');
+  initGuide(go);
+  on('start-tour', () => startTour());
+  on('show-templates', () => { go('library'); setTimeout(() => document.getElementById('templates')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 100); });
+  on('template-built', async () => { go('edit'); engine.setLoop(true); fitZoom(); emit('change'); engine.seek(0); await togglePlay(); });
+  on('project', () => engine.setLoop(!!state.project.loop));
+  engine.setLoop(!!state.project.loop);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch((e) => console.warn('sw', e));
   navigator.storage?.persist?.().catch(() => {});
   window.__mm = { state, engine, emit, commit, select, addTrack, addClip, ingest, undo, redo, setProject };
   document.body.classList.add('ready');
   await firstLaunch();
+  if (!(await db.kvGet('toured', false)) && !(await db.kvGet('tourOffered', false))) {
+    await db.kvSet('tourOffered', true);
+    const yes = await dialog({ title: '✨ Welcome to Mind Movie', body: h('p', {}, 'Would you like a one-minute guided tour? You can open it any time with the ? button at the top.'), buttons: [{ label: 'Not now', value: false }, { label: '🧭 Guide me', value: true, primary: true }] });
+    if (yes) startTour();
+  }
 }
 
 function buildShell() {
@@ -48,6 +64,7 @@ function buildShell() {
   const header = h('header', { class: 'topbar' },
     h('div', { class: 'brand' }, h('img', { src: 'icons/icon-96.png', alt: '', width: 28, height: 28 }), h('span', {}, 'Mind Movie')),
     projName, savedEl, h('span', { class: 'spacer' }),
+    h('button', { class: 'icon-btn help-top', 'aria-label': 'Help and guided tour', title: 'Help & guided tour', onclick: helpCenter }, h('span', { class: 'q' }, '?')),
     h('button', { class: 'icon-btn', 'aria-label': 'Timing info', title: 'Timing info', onclick: timingInfo }, icon('clock')),
     h('button', { class: 'icon-btn', 'aria-label': 'Settings', title: 'Settings', onclick: settings }, icon('gear')));
   const main = h('main', { id: 'main' });
@@ -91,6 +108,7 @@ function buildEdit() {
     playBtn,
     h('button', { class: 'btn ghost sm', 'aria-label': 'Forward one frame', onclick: () => step(1) }, '+1f'),
     h('button', { class: 'btn ghost sm', 'aria-label': 'Go to end', onclick: () => engine.seek(state.project.duration) }, '⇥'),
+    loopBtn = h('button', { class: 'btn ghost sm loop-btn', 'aria-label': 'Loop', 'aria-pressed': 'false', title: 'Loop: keep playing round and round', onclick: () => { const v = !engine.isLooping(); engine.setLoop(v); commit((p) => { p.loop = v; }); toast(v ? 'Loop on — add things while it plays' : 'Loop off'); } }, '↻ Loop'),
     h('div', { class: 't-read' }, tTime, tDur));
   undoBtn = h('button', { class: 'btn sm', 'aria-label': 'Undo', title: 'Undo (Ctrl+Z)', onclick: () => { if (!undo()) toast('Nothing to undo'); } }, icon('undo'));
   redoBtn = h('button', { class: 'btn sm', 'aria-label': 'Redo', title: 'Redo (Ctrl+Shift+Z)', onclick: () => { if (!redo()) toast('Nothing to redo'); } }, icon('redo'));
@@ -120,7 +138,9 @@ function buildEdit() {
   const insp = h('aside', { class: 'inspector', 'aria-label': 'Clip properties' });
   v.append(h('div', { class: 'edit' },
     h('div', { class: 'ed-stage' }, h('div', { class: 'preview-wrap' }, previewCv), transport),
-    toolbar, tl, insp));
+    toolbar, quickAddBar(), tl, insp));
+  on('loop', (v) => { loopBtn.setAttribute('aria-pressed', String(v)); loopBtn.classList.toggle('on', v); });
+  loopBtn.classList.toggle('on', engine.isLooping()); loopBtn.setAttribute('aria-pressed', String(engine.isLooping()));
   mountTimeline(tl);
   mountInspector(insp);
   on('time', syncTransport); on('play', syncTransport); on('pause', syncTransport); on('change', syncTransport); on('history', syncToolbar); on('change', syncToolbar);
@@ -206,10 +226,77 @@ function keys(e) {
   if (e.key.toLowerCase() === 's' && !mod && state.sel.clipId) splitClip(state.sel.clipId, state.playhead);
 }
 
+// ---------- Quick Add: build the movie while it loops ----------
+function freeTrack(type, start, dur) {
+  return state.project.tracks.find((t) => t.type === type && !t.lock && !t.clips.some((c) => start < c.start + c.dur && start + dur > c.start));
+}
+function quickPlace(dur) {
+  let start = Math.round(state.playhead);
+  const D = state.project.duration;
+  if (D > dur && start + dur > D) start = Math.max(0, D - dur); // keep it inside the loop
+  return start;
+}
+function quickAdd(type, opts) {
+  const start = quickPlace(opts.dur);
+  const t = freeTrack(type, start, opts.dur);
+  select(t ? t.id : null, null);
+  const c = addClip(type, { ...opts, start });
+  select(null, null); // keep the panel closed so the loop stays in view
+  return c;
+}
+function quickAddBar() {
+  const words = async () => {
+    const affs = state.project.affirmations;
+    const pick = await chooseList('+ Words at ' + fmt(state.playhead), [{ value: '__new', label: 'Type new words…', icon: '✍️' }, ...affs.map((a) => ({ value: a.text, label: a.text, icon: '“' }))]);
+    if (!pick) return;
+    let text = pick;
+    if (pick === '__new') { text = await prompt('Your words', '', { placeholder: 'I am…' }); if (!text || !text.trim()) return; text = text.trim(); commit((p) => p.affirmations.push({ id: uid('a'), text })); }
+    quickAdd('text', { text, dur: 4000, props: { fadeIn: 700, fadeOut: 700, glow: 22, glowColor: '#5a3fa0', fontSize: 60, color: '#ffffff', outline: 2, outlineColor: '#1a1040' } });
+    toast('Words added ✨');
+  };
+  const photo = async () => {
+    const id = await pickMedia('photo', 'image'); if (!id) return;
+    const c = quickAdd('photo', { mediaId: id, dur: 5000, props: { fadeIn: 800, fadeOut: 800, opacity: 90 } });
+    commit((p) => { for (const t of p.tracks) { const x = t.clips.find((k) => k.id === c.id); if (x) x.kf = { scale: [{ t: 0, v: 100, e: 'ease' }, { t: 5000, v: 112, e: 'linear' }] }; } });
+    toast('Photo added with a slow zoom');
+  };
+  const voice = async () => {
+    const voices = [...state.media.values()].filter((m) => m.kind === 'audio' && m.sub === 'voice');
+    const pick = await chooseList('+ Voice', [{ value: '__rec', label: 'Record now…', icon: '🎙' }, ...voices.map((m) => ({ value: m.id, label: m.name, desc: fmt(m.duration || 0), icon: '🎙' }))]);
+    if (!pick) return;
+    let m = pick === '__rec' ? await recordVoice() : state.media.get(pick);
+    if (!m) return;
+    quickAdd('voice', { mediaId: m.id, dur: Math.max(1000, m.duration || 4000), props: { volume: -10 } });
+    toast('Voice added');
+  };
+  const flash = () => { quickAdd('flash', { dur: 8000, props: { onMs: 50, offMs: 950, mask: true, maskMs: 50, opacity: 70 } }); toast('Flash words added (1 per second, Safe Mode on)'); };
+  const sparkle = async () => {
+    const kind = await chooseList('+ Sparkle', [['bokeh', 'Golden bokeh lights', '✨'], ['hearts', 'Rising hearts', '💗'], ['starfield', 'Flying through stars', '🌌'], ['sunrise', 'Golden sunrise', '🌅'], ['aurora', 'Aurora ribbons', '🌈'], ['spiral', 'Spiral 15%', '🌀']].map(([v, l, i]) => ({ value: v, label: l, icon: i })));
+    if (!kind) return;
+    const bg = ['starfield', 'sunrise', 'aurora'].includes(kind);
+    quickAdd('pattern', { dur: 8000, props: { patternType: kind, opacity: bg ? 60 : kind === 'spiral' ? 15 : 40, rotSpeed: kind === 'spiral' ? 25 : 0, fadeIn: 1200, fadeOut: 1200 } });
+    toast('Sparkle added');
+  };
+  return h('div', { class: 'quickadd', role: 'toolbar', 'aria-label': 'Quick add at the playhead' },
+    h('span', { class: 'qa-label' }, 'Quick add'),
+    h('button', { class: 'qa', onclick: words }, '✍️ Words'),
+    h('button', { class: 'qa', onclick: photo }, '📸 Photo'),
+    h('button', { class: 'qa', onclick: voice }, '🎙 Voice'),
+    h('button', { class: 'qa', onclick: flash }, '⚡ Flash'),
+    h('button', { class: 'qa', onclick: sparkle }, '✨ Sparkle'),
+    helpBtn('templates', 'Quick add help'));
+}
+
 // ---------- dialogs ----------
 async function settings() {
   const safeCb = h('input', { type: 'checkbox', checked: state.safe });
   safeCb.addEventListener('change', async () => { const ok = await setSafeMode(safeCb.checked); if (!ok) safeCb.checked = state.safe; toast(state.safe ? 'Safe Mode ON' : 'Safe Mode OFF'); });
+  const nameBox = h('input', { type: 'text', value: state.userName || '', placeholder: 'e.g. Jason' });
+  nameBox.addEventListener('change', async () => { state.userName = nameBox.value.trim(); await db.kvSet('userName', state.userName); toast(state.userName ? 'Hello, ' + state.userName + '! {name} in your affirmations now says your name' : 'Name cleared'); });
+  const nameIn = h('label', {}, 'Your first name (replaces {name} in affirmations)', nameBox);
+  const primeCb = h('input', { type: 'checkbox', checked: await primeEnabled() });
+  primeCb.addEventListener('change', () => { setPrime(primeCb.checked); toast(primeCb.checked ? 'Feel-it-first breathing on' : 'Breathing intro off'); });
+  const primeTog = h('label', { class: 'prop toggle' }, primeCb, h('span', { class: 'sw' }), h('span', {}, h('strong', {}, 'Feel-it-first breathing'), h('br'), h('small', { class: 'muted' }, 'Three slow breaths before your movie plays in the Play tab.')));
   const asp = h('select', {}, ['16:9', '9:16', '1:1'].map((a) => h('option', { value: a, selected: state.project.aspect === a }, a === '16:9' ? 'Wide 16:9 (TV, laptop)' : a === '9:16' ? 'Tall 9:16 (phone upright)' : 'Square 1:1')));
   asp.addEventListener('change', () => { commit((p) => { p.aspect = asp.value; }); toast('Movie shape: ' + asp.value); });
   const est = h('p', { class: 'muted small' }, 'Checking storage…');
@@ -219,6 +306,8 @@ async function settings() {
   await dialog({ title: 'Settings', body: h('div', { class: 'form' },
     h('label', { class: 'prop toggle' }, safeCb, h('span', { class: 'sw' }), h('span', {}, h('strong', {}, 'Safe Mode'), h('br'), h('small', { class: 'muted' }, 'Caps flashing at 3 per second and blocks fast saturated-red flashing (WCAG).'))),
     h('label', {}, 'Movie shape', asp),
+    nameIn,
+    primeTog,
     h('div', {}, h('h3', {}, 'Install'), standalone ? h('p', {}, '✓ Running as an installed app.') : h('div', {}, installBtn, h('p', { class: 'muted small' }, deferredInstall ? 'Adds Mind Movie to your home screen; works offline.' : 'If the button is grey: in Chrome tap ⋮ (top right) → “Add to Home screen” or “Install app”.'))),
     h('button', { class: 'btn', onclick: timingInfo }, icon('clock'), ' Timing info'),
     est,

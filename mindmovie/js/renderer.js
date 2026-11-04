@@ -128,14 +128,16 @@ function drawClip(ctx, W, H, S, project, tr, c, t, env, flags) {
   } else if (type === 'text' || type === 'flash') {
     let text = c.text;
     if (!text && project.affirmations.length) text = project.affirmations[Math.abs(cycle) % project.affirmations.length].text;
-    drawText(ctx, text || '', W, S, c, v, safeColor);
+    drawText(ctx, personal(text || '', env), W, S, c, v, safeColor);
   } else if (type === 'scroll') {
-    drawScroll(ctx, W, H, S, c, v, ti, project);
+    drawScroll(ctx, W, H, S, c, v, ti, project, env);
   } else if (type === 'pattern') {
     drawPattern(ctx, W, H, S, c, v, ti, safeColor);
   }
   ctx.restore();
 }
+
+export function personal(text, env = {}) { return String(text).replace(/\{name\}/gi, env.name || 'you'); }
 
 function setFont(ctx, c, v, S) {
   const size = (v('fontSize') || 48) * S;
@@ -179,9 +181,9 @@ function drawText(ctx, text, W, S, c, v, safeColor) {
   lines.forEach((ln, i) => strokeFill(ctx, ln, 0, (i - (lines.length - 1) / 2) * lh, c, v, S, safeColor));
 }
 
-function drawScroll(ctx, W, H, S, c, v, ti, project) {
+function drawScroll(ctx, W, H, S, c, v, ti, project, env = {}) {
   const size = setFont(ctx, c, v, S);
-  const items = (c.text ? c.text.split('\n') : project.affirmations.map((a) => a.text)).filter(Boolean);
+  const items = (c.text ? c.text.split('\n') : project.affirmations.map((a) => a.text)).filter(Boolean).map((t) => personal(t, env));
   if (!items.length) return;
   const speed = (v('scrollSpeed') || 200) * S;
   const d = (ti / 1000) * speed;
@@ -226,6 +228,76 @@ function drawPattern(ctx, W, H, S, c, v, ti, safeColor) {
   const T = ti / 1000;
   ctx.lineWidth = lw; ctx.strokeStyle = col; ctx.fillStyle = col;
   switch (c.props.patternType) {
+    case 'sunrise': {
+      const sky = ctx.createLinearGradient(0, -R, 0, R);
+      sky.addColorStop(0, '#1b1f5e'); sky.addColorStop(0.45, col2); sky.addColorStop(0.62, '#ff9a5a'); sky.addColorStop(1, '#2a1240');
+      ctx.fillStyle = sky; ctx.fillRect(-R, -R, 2 * R, 2 * R);
+      const sunY = H * 0.12 - Math.min(1, T / 20) * H * 0.08;
+      const glow = ctx.createRadialGradient(0, sunY, 0, 0, sunY, Math.min(W, H) * 0.7);
+      glow.addColorStop(0, '#fff6d8'); glow.addColorStop(0.12, col); glow.addColorStop(0.4, 'rgba(255,160,80,.35)'); glow.addColorStop(1, 'rgba(255,160,80,0)');
+      ctx.fillStyle = glow; ctx.fillRect(-R, -R, 2 * R, 2 * R);
+      ctx.save(); ctx.translate(0, sunY); ctx.rotate(T * 0.05);
+      ctx.globalAlpha *= 0.18; ctx.fillStyle = '#fff1c4';
+      for (let i = 0; i < n * 2; i++) { ctx.rotate(Math.PI / n); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(R, -R * 0.04); ctx.lineTo(R, R * 0.04); ctx.fill(); }
+      ctx.restore();
+      break;
+    }
+    case 'starfield': {
+      ctx.fillStyle = '#05061a'; ctx.fillRect(-R, -R, 2 * R, 2 * R);
+      const count = n * 30; const baseA = ctx.globalAlpha;
+      for (let i = 0; i < count; i++) {
+        const a = rand(i) * Math.PI * 2;
+        const z = ((rand(i + 999) + T * 0.08 * (0.5 + rand(i + 3))) % 1);
+        const r = Math.pow(z, 2.2) * R;
+        const sz = (0.4 + z * 2.6) * S;
+        ctx.globalAlpha = Math.min(1, z * 1.6) * baseA;
+        ctx.fillStyle = i % 7 === 0 ? col : '#ffffff';
+        ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r, sz, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    }
+    case 'aurora': {
+      const bg = ctx.createLinearGradient(0, -R, 0, R); bg.addColorStop(0, '#040a24'); bg.addColorStop(1, '#0d1a3a');
+      ctx.fillStyle = bg; ctx.fillRect(-R, -R, 2 * R, 2 * R);
+      ctx.globalCompositeOperation = 'lighter';
+      const bands = Math.max(2, Math.round(n / 3)); const baseA2 = ctx.globalAlpha;
+      for (let b = 0; b < bands; b++) {
+        const g = ctx.createLinearGradient(0, -H / 2, 0, H / 2);
+        const cc = b % 2 ? col2 : col;
+        g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.5, cc); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.globalAlpha = 0.22 * baseA2;
+        ctx.beginPath(); ctx.moveTo(-R, H / 2);
+        for (let x = -R; x <= R; x += 20) ctx.lineTo(x, Math.sin(x / (180 * S) + T * (0.4 + b * 0.15) + b) * H * 0.18 - H * 0.1 + b * 30 * S);
+        ctx.lineTo(R, H / 2); ctx.closePath(); ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      break;
+    }
+    case 'bokeh': {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < n * 4; i++) {
+        const x = (rand(i) - 0.5) * W + Math.sin(T * 0.3 + i) * 30 * S;
+        const y = ((rand(i + 50) - T * 0.02 * (0.3 + rand(i + 7))) % 1 + 1) % 1 * H - H / 2;
+        const r = (12 + rand(i + 9) * 50) * S;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, i % 3 ? col : col2); g.addColorStop(0.6, (i % 3 ? col : col2) + '55'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      break;
+    }
+    case 'hearts': {
+      for (let i = 0; i < n * 2; i++) {
+        const x = (rand(i) - 0.5) * W;
+        const y = H / 2 - (((rand(i + 40) + T * 0.06 * (0.4 + rand(i + 2))) % 1) * (H + 80 * S)) + 40 * S;
+        const sz = (10 + rand(i + 5) * 24) * S;
+        ctx.save(); ctx.translate(x + Math.sin(T + i) * 12 * S, y); ctx.scale(sz / 20, sz / 20);
+        ctx.fillStyle = i % 2 ? col : col2;
+        ctx.beginPath(); ctx.moveTo(0, 6); ctx.bezierCurveTo(-14, -4, -8, -16, 0, -8); ctx.bezierCurveTo(8, -16, 14, -4, 0, 6); ctx.fill();
+        ctx.restore();
+      }
+      break;
+    }
     case 'spiral': {
       const arms = Math.max(1, Math.round(n / 3));
       const turns = n;

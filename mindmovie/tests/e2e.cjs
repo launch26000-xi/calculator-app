@@ -38,6 +38,8 @@ const sel = () => mm(() => { const s = window.__mm.state.sel; const p = window._
   // 1. first-launch warning
   ok('seizure warning on first launch', await page.locator('.dialog h2', { hasText: 'Before you begin' }).isVisible());
   await dlgBtn('I understand');
+  ok('tour offered after warning', await page.locator('.dialog h2', { hasText: 'Welcome to Mind Movie' }).waitFor({ timeout: 3000 }).then(() => true, () => false));
+  await dlgBtn('Not now');
   ok('warning dismissed', await noDialog());
 
   // 2. uploads
@@ -400,6 +402,7 @@ const sel = () => mm(() => { const s = window.__mm.state.sel; const p = window._
   ok('move layer down via menu', (await mm((id) => window.__mm.state.project.tracks.findIndex((t) => t.id === id), t0id)) === 1);
   // drag grip to reorder back to top
   const grip = page.locator(`.tl-row[data-track="${t0id}"] .grip`);
+  await page.evaluate(() => { document.querySelector('.tl-scroll').scrollTop = 0; }); await sleep(100);
   const gb = await grip.boundingBox(); const firstRow = await page.locator('.tl-row[data-track]').first().boundingBox();
   await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2); await page.mouse.down();
   await page.mouse.move(gb.x + gb.width / 2, firstRow.y + 4, { steps: 8 }); await page.mouse.up(); await sleep(150);
@@ -513,7 +516,14 @@ const sel = () => mm(() => { const s = window.__mm.state.sel; const p = window._
   // 23. player + streak
   await tab('play');
   await page.locator('.player button[aria-label="Play"]').click();
+  ok('feel-it-first breathing shows before play', await page.locator('.prime').waitFor({ timeout: 3000 }).then(() => true, () => false));
+  await page.locator('.prime button', { hasText: 'Skip' }).click();
   await page.waitForFunction(() => !window.__mm.state.playing && window.__mm.state.playhead >= window.__mm.state.project.duration - 5, null, { timeout: 10000 });
+  await page.locator('.dialog h2', { hasText: 'How do you feel' }).waitFor({ timeout: 3000 });
+  ok('feeling check-in after watching', true);
+  await page.locator('.face').nth(5).click();
+  await page.locator('.dialog textarea').fill('Got a call about the new job!');
+  await dlgBtn('Save');
   await sleep(300);
   ok('watching to the end marks today', (await page.locator('.p-streak').textContent()).includes('watched today'));
   await page.locator('.player .scrub').evaluate((el) => { el.value = '500'; el.dispatchEvent(new Event('input', { bubbles: true })); });

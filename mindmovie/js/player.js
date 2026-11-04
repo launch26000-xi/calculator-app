@@ -5,9 +5,10 @@ import { fmt, frameOf } from './core.js';
 import * as engine from './engine.js';
 import { beforePlay } from './safety.js';
 import { markWatched, streak } from './progress.js';
+import { prime, primeEnabled, checkIn } from './joy.js';
 
 let root, canvas, scrub, timeEl, playBtn, wrap, loopBtn, warnEl;
-let watchedMs = 0, lastT = null;
+let watchedMs = 0, lastT = null, passDone = false, checked = false, priming = false;
 
 export function mountPlayer(el) {
   root = el;
@@ -15,7 +16,8 @@ export function mountPlayer(el) {
   scrub = h('input', { type: 'range', min: 0, max: 1000, step: 1, value: 0, class: 'scrub', 'aria-label': 'Scrub' });
   timeEl = h('output', { class: 'p-time' }, '00:00.000');
   playBtn = h('button', { class: 'btn primary round', 'aria-label': 'Play', onclick: toggle }, icon('play'));
-  loopBtn = h('button', { class: 'btn ghost', 'aria-pressed': 'false', onclick: () => { const v = loopBtn.getAttribute('aria-pressed') !== 'true'; loopBtn.setAttribute('aria-pressed', String(v)); loopBtn.classList.toggle('on', v); engine.setLoop(v); toast(v ? 'Loop on' : 'Loop off'); } }, '↻ Loop');
+  loopBtn = h('button', { class: 'btn ghost', 'aria-pressed': 'false', onclick: () => { const v = !engine.isLooping(); engine.setLoop(v); toast(v ? 'Loop on' : 'Loop off'); } }, '↻ Loop');
+  on('loop', (v) => { loopBtn.setAttribute('aria-pressed', String(v)); loopBtn.classList.toggle('on', v); });
   warnEl = h('div', { class: 'p-warn' });
   const fsBtn = h('button', { class: 'btn ghost', 'aria-label': 'Full screen', onclick: fullscreen }, icon('full'), ' Full screen');
   const back = h('button', { class: 'btn ghost', 'aria-label': 'Back 5 seconds', onclick: () => engine.seek(state.playhead - 5000) }, '−5s');
@@ -32,24 +34,28 @@ export function mountPlayer(el) {
   root.append(wrap);
   on('time', update); on('play', update); on('pause', update); on('change', update);
   on('ended', () => { if (state.tab === 'play') finishWatch(true); });
+  on('pause', () => { if (state.tab === 'play' && passDone && !checked) { checked = true; setTimeout(checkIn, 300); } });
+  on('project', () => { passDone = false; checked = false; watchedMs = 0; });
   on('progress', update);
   document.addEventListener('fullscreenchange', () => wrap.classList.toggle('fs', !!document.fullscreenElement));
 }
 
-export function show() { engine.addTarget(canvas); update(); }
+export function show() { engine.addTarget(canvas); checked = false; update(); }
 export function hide() { engine.removeTarget(canvas); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
 
 async function toggle() {
   if (engine.isPlaying()) { engine.pause(); return; }
   if (!state.project.duration) return toast('Your movie is empty — add clips in the Edit tab');
   if (!(await beforePlay(state.project))) return;
+  if (priming) return;
+  if ((state.playhead < 100 || state.playhead >= state.project.duration - 5) && (await primeEnabled())) { priming = true; await prime(wrap.querySelector('.stage')); priming = false; }
   lastT = null;
   engine.play();
 }
 
 function finishWatch(ended) {
   const dur = state.project.duration;
-  if (dur > 0 && (ended && watchedMs >= dur * 0.6)) { markWatched(); }
+  if (dur > 0 && ended && (watchedMs >= dur * 0.6 || passDone)) { markWatched(); passDone = true; if (!checked) { checked = true; setTimeout(checkIn, 600); } }
   watchedMs = 0;
 }
 
@@ -58,6 +64,7 @@ function update() {
   const t = state.playhead, dur = state.project.duration;
   if (state.playing && lastT !== null && t > lastT && t - lastT < 1000) watchedMs += t - lastT;
   lastT = state.playing ? t : null;
+  if (state.tab === 'play' && !passDone && dur > 0 && watchedMs >= dur * 0.95) { passDone = true; markWatched(); } // one full pass of a loop counts
   if (document.activeElement !== scrub) scrub.value = dur ? Math.round((t / dur) * 1000) : 0;
   timeEl.textContent = `${fmt(t)} / ${fmt(dur)} · f${frameOf(t)}`;
   playBtn.replaceChildren(icon(state.playing ? 'pause' : 'play'));

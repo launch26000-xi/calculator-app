@@ -21,6 +21,7 @@ export function exportAudioStream() { audioCtx(); return streamDest.stream; }
 
 // ---------- clock ----------
 const clock = { playing: false, t0: 0, perf0: 0, loop: false, end: null };
+export function isLooping() { return clock.loop; }
 export function now() { return clock.playing ? clock.t0 + (performance.now() - clock.perf0) : state.playhead; }
 export function play(from) {
   audioCtx();
@@ -85,12 +86,12 @@ function loop(ts) {
   for (const cv of targets) {
     if (!cv.isConnected && !cv.__offscreenOK) continue;
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
-    lastFlags = draw(cv.getContext('2d'), W, H, state.project, t, { safe: state.safe, getImage, getVideo, getBeats });
+    lastFlags = draw(cv.getContext('2d'), W, H, state.project, t, { safe: state.safe, name: state.userName, getImage, getVideo, getBeats });
   }
   frameCount++;
 }
 requestAnimationFrame(loop);
-export function setLoop(v) { clock.loop = v; }
+export function setLoop(v) { clock.loop = !!v; emit('loop', clock.loop); }
 
 // ---------- media sync ----------
 const videos = new Map();   // clipId -> { el, mediaId, node }

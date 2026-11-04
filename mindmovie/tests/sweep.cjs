@@ -22,6 +22,7 @@ const ok = (n, c, i = '') => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL
   await page.goto(URL);
   await page.waitForSelector('body.ready');
   await page.locator('.dialog button', { hasText: 'I understand' }).tap();
+  await page.locator('.dialog button', { hasText: 'Not now' }).tap();
   // seed media + a 12-track project through the UI functions
   const fs = require('fs');
   const files = ['photo1.jpg', 'clip.webm', 'music120.mp3'].map((f) => ({ name: f, b64: fs.readFileSync(path.join(MEDIA, f)).toString('base64') }));
@@ -96,6 +97,7 @@ const ok = (n, c, i = '') => { if (!c) fails++; console.log((c ? 'PASS ' : 'FAIL
     }
     await page.evaluate(() => document.querySelectorAll('.scrim').forEach((s) => s.remove()));
     await page.evaluate(() => document.fullscreenElement && document.exitFullscreen()).catch(() => {});
+    if (await page.locator('.tour').count()) await page.locator('.tour-bubble button', { hasText: 'Skip tour' }).tap();
   }
   const dead = [], tested = new Set();
   const QUERY = (scope) => [...document.querySelectorAll(scope + ' button, ' + scope + ' input[type=checkbox], ' + scope + ' select')]

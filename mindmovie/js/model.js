@@ -72,7 +72,7 @@ const PULSE = [
   P('maskMs', 'Mask duration', 17, 1000, 1, 'ms', 50, { kf: false }),
   { key: 'maskType', label: 'Mask style', type: 'select', options: [['scramble', 'Scramble'], ['pattern', 'Pattern'], ['black', 'Black frame']], dflt: 'scramble' },
 ];
-export const PATTERNS = [['spiral', 'Spiral'], ['twirl', 'Twirl'], ['rings', 'Concentric rings'], ['mandala', 'Mandala'], ['geo', 'Geometric pulse']];
+export const PATTERNS = [['sunrise', 'Golden sunrise (background)'], ['starfield', 'Flying through stars (background)'], ['aurora', 'Aurora ribbons (background)'], ['bokeh', 'Golden bokeh lights'], ['hearts', 'Rising hearts'], ['spiral', 'Spiral'], ['twirl', 'Twirl'], ['rings', 'Concentric rings'], ['mandala', 'Mandala'], ['geo', 'Geometric pulse']];
 
 const FIT = { key: 'fit', label: 'Fit', type: 'select', options: [['cover', 'Fill screen (crop)'], ['contain', 'Show whole picture']], dflt: 'cover' };
 

@@ -5,6 +5,10 @@ import { uid } from './db.js';
 import { addClip } from './actions.js';
 import { fmt } from './core.js';
 import { dropImage, resetMedia } from './engine.js';
+import { emit } from './store.js';
+import { helpBtn, showHelp } from './help.js';
+import { TEMPLATES, createFromTemplate } from './templates.js';
+import { ideasDialog } from './joy.js';
 
 let root;
 export function mountLibrary(el) {
@@ -315,8 +319,8 @@ function affirmationList() {
   input.id = 'aff-input';
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
   const hintFor = (t) => (/^\s*i\s+(am|have|feel|choose|attract|create|enjoy|love|deserve|live|earn|give|receive)\b/i.test(t) ? null : h('small', { class: 'warn-hint' }, 'Hint: start with “I am…” or “I have…”'));
-  return h('section', { class: 'card' },
-    h('div', { class: 'sec-head' }, h('h2', {}, 'Affirmations'), h('span', { class: 'muted' }, p.affirmations.length + ' lines')),
+  return h('section', { class: 'card aff-card' },
+    h('div', { class: 'sec-head' }, h('h2', {}, 'Affirmations ', helpBtn('affirmations')), h('span', { class: 'muted' }, p.affirmations.length + ' lines')),
     h('p', { class: 'muted' }, 'Write each line in first person, present tense. Each line can go on the timeline as its own clip. Flash and scroll clips with no text of their own cycle through all these lines.'),
     h('ol', { class: 'aff-list' }, p.affirmations.map((a, i) => h('li', { class: 'aff' },
       h('div', { class: 'aff-text' }, h('span', {}, a.text), hintFor(a.text)),
@@ -326,7 +330,8 @@ function affirmationList() {
         h('button', { class: 'btn sm', onclick: async () => { const v = await prompt('Edit affirmation', a.text); if (v && v.trim()) { commit((pr) => { pr.affirmations.find((x) => x.id === a.id).text = v.trim(); }); render(); } } }, 'Edit'),
         h('button', { class: 'btn sm primary', onclick: () => addAffirmation(a) }, icon('plus'), ' Timeline'),
         h('button', { class: 'btn sm ghost', 'aria-label': 'Delete affirmation', onclick: async () => { if (await confirmBox('Delete this line?', a.text, 'Delete', true)) { commit((pr) => { pr.affirmations = pr.affirmations.filter((x) => x.id !== a.id); }); render(); } } }, icon('trash')))))),
-    h('div', { class: 'row' }, input, h('button', { class: 'btn primary', onclick: add }, icon('plus'), ' Add')));
+    h('div', { class: 'row' }, input, h('button', { class: 'btn primary', onclick: add }, icon('plus'), ' Add')),
+    h('button', { class: 'btn gold', onclick: async () => { const lines = await ideasDialog(); if (!lines.length) return; commit((pr) => { for (const l of lines) pr.affirmations.push({ id: uid('a'), text: l }); }); render(); toast(`Added ${lines.length} affirmation${lines.length > 1 ? 's' : ''}`); } }, '✨ Ideas — ready-made affirmations'));
 }
 
 function render() {
@@ -338,8 +343,10 @@ function render() {
   const scrollY = root.scrollTop;
   root.replaceChildren(
     h('div', { class: 'lib' },
+      startCard(),
+      templateCard(),
       h('section', { class: 'card hero' },
-        h('h1', {}, 'Your library'),
+        h('h1', {}, 'Your library ', helpBtn('media')),
         h('p', { class: 'muted' }, 'Everything stays on this device, and works offline.'),
         h('div', { class: 'action-grid' },
           h('button', { class: 'tile', onclick: () => uploadVisual() }, icon('upload'), h('span', {}, 'Upload photos & videos')),
@@ -354,6 +361,33 @@ function render() {
       section('Music', music, 'No music yet. Tap “Upload music” (mp3, m4a or wav).')));
   root.scrollTop = scrollY;
 }
+function startCard() {
+  return h('section', { class: 'card start-card' },
+    h('div', { class: 'start-top' }, h('div', { class: 'start-glow' }, '✨'),
+      h('div', {}, h('h1', {}, 'See it. Hear it. Feel it.'), h('p', { class: 'muted' }, 'Make a short movie of the life you want — then watch it daily until it feels real.'))),
+    h('ol', { class: 'start-steps' },
+      h('li', {}, h('span', { class: 'step-ic' }, '✍️'), h('span', {}, h('strong', {}, 'Write'), ' a few “I am…” lines')),
+      h('li', {}, h('span', { class: 'step-ic' }, '📸'), h('span', {}, h('strong', {}, 'Add'), ' photos, your voice, music')),
+      h('li', {}, h('span', { class: 'step-ic' }, '🎬'), h('span', {}, h('strong', {}, 'Tap a template'), ' — it loops')),
+      h('li', {}, h('span', { class: 'step-ic' }, '💫'), h('span', {}, h('strong', {}, 'Watch & feel'), ' it every day'))),
+    h('div', { class: 'row wrap' },
+      h('button', { class: 'btn primary', onclick: () => emit('start-tour') }, '🧭 Guide me'),
+      h('button', { class: 'btn', onclick: () => showHelp('start') }, 'How it works'),
+      h('button', { class: 'btn', onclick: () => showHelp('feel') }, '💫 Make it feel real')));
+}
+
+function templateCard() {
+  return h('section', { class: 'card tpl-card', id: 'templates' },
+    h('div', { class: 'sec-head' }, h('h2', {}, '🎬 Templates ', helpBtn('templates')), h('span', { class: 'muted small' }, 'one tap · loops')),
+    h('p', { class: 'muted small' }, 'Builds a looping movie from your affirmations, photos, voice and music. Add more while it plays.'),
+    h('div', { class: 'tpl-grid' }, TEMPLATES.map((t) => h('button', { class: 'tpl tpl-' + t.id, onclick: async () => {
+      const ok = await dialog({ title: t.icon + ' ' + t.name, body: h('div', {}, h('p', {}, t.desc), h('p', { class: 'muted small' }, 'Mood: ' + t.mood + ' · ' + Math.round(t.len / 1000) + ' s loop'),
+        h('p', { class: 'muted small' }, `Uses your ${state.project.affirmations.length} affirmations and ${[...state.media.values()].length} library items. It opens as a new project — your current one is kept.`)),
+        buttons: [{ label: 'Cancel', value: false }, { label: 'Create & play', value: true, primary: true }] });
+      if (ok) { await createFromTemplate(t.id); toast(t.name + ' created — press ▶ and keep adding'); }
+    } }, h('span', { class: 'tpl-ic' }, t.icon), h('strong', {}, t.name), h('small', {}, t.mood)))));
+}
+
 function section(title, items, empty) {
   return h('section', { class: 'card' },
     h('div', { class: 'sec-head' }, h('h2', {}, title), h('span', { class: 'muted' }, items.length + '')),
